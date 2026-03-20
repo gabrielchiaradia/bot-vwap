@@ -1,4 +1,18 @@
-```yaml
+# ══════════════════════════════════════════════════════════
+#  docker-compose.yml — VWAP Trading Bot
+#
+#  Servicios:
+#    vwap-eth    → Bot 1 (lee .env.eth)
+#    vwap-btc    → Bot 2 (lee .env.btc) — descomentarear para activar
+#
+#    dashboard   → nginx para visualizar resultados
+#
+#  Uso:
+#    docker compose up -d          # Arrancar en background
+#    docker compose logs -f vwap   # Ver logs en tiempo real
+#    docker compose down           # Detener
+#    docker compose pull && docker compose up -d  # Actualizar
+# ══════════════════════════════════════════════════════════
 version: '3.8'
 
 services:
