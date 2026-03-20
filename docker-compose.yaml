@@ -25,6 +25,7 @@ services:
     environment:
       - TZ=America/Argentina/Buenos_Aires
       - BOT_ID=ETH
+      - PYTHONPATH=/app
     volumes:
       - ./dashboard/data:/app/logs
     logging:
@@ -42,6 +43,7 @@ services:
     environment:
       - TZ=America/Argentina/Buenos_Aires
       - BOT_ID=BTC
+      - PYTHONPATH=/app
     volumes:
       - ./dashboard/data:/app/logs
     logging:
