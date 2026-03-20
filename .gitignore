@@ -1,0 +1,16 @@
+# Entornos y Keys
+.env*
+!.env.example
+
+# Docker y Logs
+*.log
+logs/
+__pycache__/
+venv/
+
+# Datos compartidos (Dashboard)
+dashboard/data/*.json
+backtest/data/*.csv
+
+# SO
+.DS_Store

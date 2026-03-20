@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VWAP Bot — Manual de Operaciones</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:     #0f0f0f;
+  --paper:   #f5f2eb;
+  --cream:   #ede9df;
+  --rule:    #d4cfc4;
+  --accent:  #1a5c3a; /* Verde institucional para este bot */
+  --code-bg: #1c1c1c;
+  --code-fg: #e8e0d0;
+}
+body { background: var(--paper); color: var(--ink); font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 1.6; padding: 40px; }
+.page { max-width: 900px; margin: 0 auto; background: white; padding: 60px; border: 1px solid var(--rule); box-shadow: 10px 10px 0 var(--cream); }
+h1 { font-family: 'DM Serif Display', serif; font-size: 32px; margin-bottom: 20px; border-bottom: 2px solid var(--ink); }
+h2 { font-size: 18px; margin: 30px 0 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); }
+pre { background: var(--code-bg); color: var(--code-fg); padding: 15px; border-radius: 4px; overflow-x: auto; position: relative; margin: 10px 0; }
+code { font-weight: 600; color: var(--accent); }
+.cmd-btn { position: absolute; right: 10px; top: 10px; background: #333; color: #eee; border: none; padding: 4px 8px; font-size: 10px; cursor: pointer; border-radius: 3px; }
+table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+th, td { border: 1px solid var(--rule); padding: 10px; text-align: left; }
+th { background: var(--cream); font-weight: 600; }
+.step { margin-bottom: 15px; padding-left: 20px; border-left: 3px solid var(--rule); }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>VWAP REVERSION BOT — V3</h1>
+  <p>Manual consolidado de instalación, despliegue y gestión de repositorio para arquitectura multi-instancia (BTC/ETH).</p>
+
+  <h2>1. Gestión del Repositorio (GitHub)</h2>
+  <div class="step">
+    <p>Para inicializar el proyecto y subirlo a un nuevo repo:</p>
+    <pre><button class="cmd-btn" onclick="copiar(this)">copiar</button>
+git init
+git add .
+git commit -m "Initial commit: VWAP Bot Multi-instance"
+git branch -M main
+git remote add origin https://github.com/TU_USUARIO/bot-vwap.git
+git push -u origin main</pre>
+  </div>
+  <div class="step">
+    <p>Flujo de trabajo diario (Push/Pull):</p>
+    <pre><button class="cmd-btn" onclick="copiar(this)">copiar</button>
+# Para subir cambios
+git add .
+git commit -m "Descripción del cambio"
+git push origin main
+
+# Para actualizar el VPS con cambios locales
+git pull origin main</pre>
+  </div>
+
+  <h2>2. Instalación y Despliegue (VPS)</h2>
+  <p>Asegúrate de tener <code>Docker</code> y <code>Docker Compose</code> instalados.</p>
+  <div class="step">
+    <p>1. Crear archivos de entorno (basados en las llaves de Binance):</p>
+    <code>nano .env.eth</code> y <code>nano .env.btc</code>
+  </div>
+  <div class="step">
+    <p>2. Construir e iniciar los contenedores:</p>
+    <pre><button class="cmd-btn" onclick="copiar(this)">copiar</button>
+docker-compose up -d --build</pre>
+  </div>
+
+  <h2>3. Comandos de Mantenimiento</h2>
+  <table>
+    <tr><th>Acción</th><th>Comando</th></tr>
+    <tr><td>Ver Estado General</td><td><code>docker ps</code></td></tr>
+    <tr><td>Ver Logs en Vivo (ETH)</td><td><code>docker logs -f vwap-eth</code></td></tr>
+    <tr><td>Ver Logs en Vivo (BTC)</td><td><code>docker logs -f vwap-btc</code></td></tr>
+    <tr><td>Reiniciar Bots</td><td><code>docker-compose restart</code></td></tr>
+    <tr><td>Detener todo</td><td><code>docker-compose down</code></td></tr>
+  </table>
+
+  <h2>4. Dashboard & Logs</h2>
+  <p>El dashboard corre en el puerto <code>8081</code>. Los datos se actualizan cada minuto.</p>
+  <ul>
+    <li>Acceso: <code>http://IP_DE_TU_VPS:8081</code></li>
+    <li>Los archivos JSON se guardan en <code>dashboard/data/</code> y están separados por <code>BOT_ID</code>.</li>
+  </ul>
+
+  <h2>5. Cortacircuitos (Risk Management)</h2>
+  <p>El bot tiene reglas estrictas programadas en <code>src/risk.py</code>:</p>
+  <table>
+    <tr><th>Regla</th><th>Descripción</th></tr>
+    <tr><td>Daily Stop</td><td>Si el bot suma 2 trades perdedores (LOSS), se detiene hasta el próximo día (UTC).</td></tr>
+    <tr><td>Drawdown Alert</td><td>Notifica por Telegram si el balance cae un 10% respecto al inicio.</td></tr>
+    <li><b>Importante:</b> El riesgo (RISK_PER_TRADE) se edita en el archivo <code>.env</code> de cada bot.</li>
+  </table>
+
+  <footer style="margin-top: 50px; font-size: 11px; color: #888; border-top: 1px solid var(--rule); padding-top: 10px;">
+    VWAP Reversion Bot · 2026 · Built for Web Tier Gemini 3 Flash
+  </footer>
+</div>
+
+<script>
+function copiar(btn) {
+  const pre = btn.parentElement.querySelector('pre');
+  const texto = pre.innerText.replace('copiar', '').trim();
+  navigator.clipboard.writeText(texto).then(() => {
+    btn.textContent = '✓ copiado';
+    setTimeout(() => { btn.textContent = 'copiar'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

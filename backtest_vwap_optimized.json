@@ -1,0 +1,847 @@
+{
+  "summaries": [
+    {
+      "label": "PRO_2.5_0.4",
+      "config": {
+        "b": 2.5,
+        "r": 0.4
+      },
+      "pnl": -236.09373769070476,
+      "trades": [
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 15.97,
+          "balance": 1015.97,
+          "time": "2026-02-19 01:12"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 16.23,
+          "balance": 1032.2,
+          "time": "2026-02-19 01:30"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 16.49,
+          "balance": 1048.69,
+          "time": "2026-02-19 01:40"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 16.75,
+          "balance": 1065.43,
+          "time": "2026-02-19 02:57"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -42.66,
+          "balance": 1022.77,
+          "time": "2026-02-19 03:02"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 16.34,
+          "balance": 1039.11,
+          "time": "2026-02-19 03:24"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 16.6,
+          "balance": 1055.71,
+          "time": "2026-02-19 03:44"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 16.86,
+          "balance": 1072.57,
+          "time": "2026-02-19 03:48"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 17.13,
+          "balance": 1089.7,
+          "time": "2026-02-19 03:51"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -43.63,
+          "balance": 1046.07,
+          "time": "2026-02-19 19:07"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -41.88,
+          "balance": 1004.18,
+          "time": "2026-02-19 19:12"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -40.21,
+          "balance": 963.98,
+          "time": "2026-02-19 19:16"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -38.6,
+          "balance": 925.38,
+          "time": "2026-02-19 19:22"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -37.05,
+          "balance": 888.33,
+          "time": "2026-02-19 19:24"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -35.57,
+          "balance": 852.76,
+          "time": "2026-02-19 20:59"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.62,
+          "balance": 866.38,
+          "time": "2026-02-19 21:26"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -34.69,
+          "balance": 831.69,
+          "time": "2026-02-19 21:36"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -33.3,
+          "balance": 798.39,
+          "time": "2026-02-19 21:40"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 12.75,
+          "balance": 811.14,
+          "time": "2026-02-20 00:10"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 12.96,
+          "balance": 824.1,
+          "time": "2026-02-20 01:57"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.16,
+          "balance": 837.26,
+          "time": "2026-02-20 01:59"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.37,
+          "balance": 850.63,
+          "time": "2026-02-20 02:02"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.59,
+          "balance": 864.22,
+          "time": "2026-02-20 02:38"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.8,
+          "balance": 878.02,
+          "time": "2026-02-20 02:49"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -35.16,
+          "balance": 842.86,
+          "time": "2026-02-20 02:50"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.46,
+          "balance": 856.33,
+          "time": "2026-02-20 03:21"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.68,
+          "balance": 870.0,
+          "time": "2026-02-20 05:31"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 13.9,
+          "balance": 883.9,
+          "time": "2026-02-20 10:43"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -35.39,
+          "balance": 848.51,
+          "time": "2026-02-20 22:13"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -33.97,
+          "balance": 814.53,
+          "time": "2026-02-20 23:39"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 13.01,
+          "balance": 827.54,
+          "time": "2026-02-21 00:41"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 13.22,
+          "balance": 840.76,
+          "time": "2026-02-21 00:43"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 13.43,
+          "balance": 854.19,
+          "time": "2026-02-21 00:44"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 13.64,
+          "balance": 867.83,
+          "time": "2026-02-21 00:50"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -34.75,
+          "balance": 833.08,
+          "time": "2026-02-21 01:01"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -33.36,
+          "balance": 799.73,
+          "time": "2026-02-21 01:22"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -32.02,
+          "balance": 767.71,
+          "time": "2026-02-21 01:28"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.26,
+          "balance": 779.97,
+          "time": "2026-02-21 03:01"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -31.23,
+          "balance": 748.74,
+          "time": "2026-02-21 06:08"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.96,
+          "balance": 760.7,
+          "time": "2026-02-21 06:30"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.15,
+          "balance": 772.85,
+          "time": "2026-02-21 06:31"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.34,
+          "balance": 785.19,
+          "time": "2026-02-21 06:35"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.54,
+          "balance": 797.73,
+          "time": "2026-02-21 06:43"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.74,
+          "balance": 810.47,
+          "time": "2026-02-21 06:48"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.94,
+          "balance": 823.42,
+          "time": "2026-02-21 07:42"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 13.15,
+          "balance": 836.57,
+          "time": "2026-02-21 07:52"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -33.5,
+          "balance": 803.07,
+          "time": "2026-02-21 21:02"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.83,
+          "balance": 815.9,
+          "time": "2026-02-22 12:38"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -32.67,
+          "balance": 783.23,
+          "time": "2026-02-22 15:39"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 12.51,
+          "balance": 795.74,
+          "time": "2026-02-22 22:21"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 12.71,
+          "balance": 808.45,
+          "time": "2026-02-22 23:24"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 12.91,
+          "balance": 821.36,
+          "time": "2026-02-22 23:29"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.12,
+          "balance": 834.48,
+          "time": "2026-02-22 23:35"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.33,
+          "balance": 847.81,
+          "time": "2026-02-22 23:37"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.54,
+          "balance": 861.35,
+          "time": "2026-02-22 23:54"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -34.49,
+          "balance": 826.86,
+          "time": "2026-02-23 00:09"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -33.11,
+          "balance": 793.76,
+          "time": "2026-02-23 00:17"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 12.68,
+          "balance": 806.43,
+          "time": "2026-02-23 09:59"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 12.88,
+          "balance": 819.31,
+          "time": "2026-02-23 10:52"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.09,
+          "balance": 832.4,
+          "time": "2026-02-25 01:12"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.3,
+          "balance": 845.7,
+          "time": "2026-02-25 08:51"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.51,
+          "balance": 859.2,
+          "time": "2026-02-25 10:35"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.72,
+          "balance": 872.93,
+          "time": "2026-02-25 10:43"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 13.94,
+          "balance": 886.87,
+          "time": "2026-02-25 11:08"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 14.17,
+          "balance": 901.03,
+          "time": "2026-02-26 17:01"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 14.39,
+          "balance": 915.42,
+          "time": "2026-02-26 17:12"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 14.62,
+          "balance": 930.05,
+          "time": "2026-02-26 17:59"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -37.24,
+          "balance": 892.81,
+          "time": "2026-02-26 18:06"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -35.75,
+          "balance": 857.06,
+          "time": "2026-02-26 18:07"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 13.69,
+          "balance": 870.75,
+          "time": "2026-02-27 10:20"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 13.91,
+          "balance": 884.66,
+          "time": "2026-02-27 10:22"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -35.42,
+          "balance": 849.23,
+          "time": "2026-02-28 00:12"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -34.0,
+          "balance": 815.23,
+          "time": "2026-02-28 14:37"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -32.64,
+          "balance": 782.59,
+          "time": "2026-02-28 14:39"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -31.33,
+          "balance": 751.25,
+          "time": "2026-03-01 00:41"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -30.08,
+          "balance": 721.17,
+          "time": "2026-03-01 01:04"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.52,
+          "balance": 732.69,
+          "time": "2026-03-01 01:09"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.7,
+          "balance": 744.39,
+          "time": "2026-03-01 01:11"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -29.81,
+          "balance": 714.59,
+          "time": "2026-03-01 10:06"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.41,
+          "balance": 726.0,
+          "time": "2026-03-01 16:50"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.6,
+          "balance": 737.6,
+          "time": "2026-03-01 19:04"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.78,
+          "balance": 749.38,
+          "time": "2026-03-01 19:06"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.97,
+          "balance": 761.35,
+          "time": "2026-03-01 19:12"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -30.48,
+          "balance": 730.86,
+          "time": "2026-03-01 22:13"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 11.67,
+          "balance": 742.54,
+          "time": "2026-03-01 23:04"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 11.86,
+          "balance": 754.4,
+          "time": "2026-03-01 23:31"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.05,
+          "balance": 766.45,
+          "time": "2026-03-02 06:17"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 12.24,
+          "balance": 778.69,
+          "time": "2026-03-02 14:31"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -31.18,
+          "balance": 747.51,
+          "time": "2026-03-03 18:11"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.94,
+          "balance": 759.45,
+          "time": "2026-03-03 21:02"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.13,
+          "balance": 771.58,
+          "time": "2026-03-04 00:34"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.32,
+          "balance": 783.9,
+          "time": "2026-03-04 00:59"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.52,
+          "balance": 796.42,
+          "time": "2026-03-04 01:08"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.72,
+          "balance": 809.14,
+          "time": "2026-03-04 01:18"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.92,
+          "balance": 822.07,
+          "time": "2026-03-04 01:20"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -32.92,
+          "balance": 789.15,
+          "time": "2026-03-04 01:23"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.6,
+          "balance": 801.76,
+          "time": "2026-03-04 02:05"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.81,
+          "balance": 814.56,
+          "time": "2026-03-04 02:15"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -32.62,
+          "balance": 781.95,
+          "time": "2026-03-04 02:34"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -31.31,
+          "balance": 750.64,
+          "time": "2026-03-04 02:40"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -30.06,
+          "balance": 720.58,
+          "time": "2026-03-04 02:42"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -28.85,
+          "balance": 691.73,
+          "time": "2026-03-04 02:44"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.05,
+          "balance": 702.78,
+          "time": "2026-03-04 03:01"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.22,
+          "balance": 714.0,
+          "time": "2026-03-04 03:11"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.4,
+          "balance": 725.41,
+          "time": "2026-03-04 03:28"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.59,
+          "balance": 736.99,
+          "time": "2026-03-06 14:09"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 11.77,
+          "balance": 748.76,
+          "time": "2026-03-07 05:39"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -29.98,
+          "balance": 718.78,
+          "time": "2026-03-07 05:59"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 11.48,
+          "balance": 730.26,
+          "time": "2026-03-07 07:27"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 11.66,
+          "balance": 741.93,
+          "time": "2026-03-07 07:35"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 11.85,
+          "balance": 753.78,
+          "time": "2026-03-07 07:42"
+        },
+        {
+          "side": "LONG",
+          "result": "LOSS",
+          "pnl": -30.18,
+          "balance": 723.6,
+          "time": "2026-03-08 00:22"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 11.56,
+          "balance": 735.15,
+          "time": "2026-03-08 10:22"
+        },
+        {
+          "side": "LONG",
+          "result": "WIN",
+          "pnl": 11.74,
+          "balance": 746.9,
+          "time": "2026-03-09 03:01"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 11.93,
+          "balance": 758.83,
+          "time": "2026-03-09 10:43"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.12,
+          "balance": 770.95,
+          "time": "2026-03-09 11:03"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.31,
+          "balance": 783.26,
+          "time": "2026-03-09 11:10"
+        },
+        {
+          "side": "SHORT",
+          "result": "WIN",
+          "pnl": 12.51,
+          "balance": 795.77,
+          "time": "2026-03-09 22:56"
+        },
+        {
+          "side": "SHORT",
+          "result": "LOSS",
+          "pnl": -31.86,
+          "balance": 763.91,
+          "time": "2026-03-10 14:15"
+        }
+      ]
+    }
+  ]
+}
