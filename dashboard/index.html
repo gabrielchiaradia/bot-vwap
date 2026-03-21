@@ -154,45 +154,34 @@
   footer{border-top:1px solid var(--border);padding:16px 32px;color:var(--muted);font-size:10px;display:flex;justify-content:space-between;align-items:center}
  /* 📱 AJUSTES PARA CELULARES */
 @media (max-width: 768px) {
-    header {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 15px;
-        padding: 15px;
-    }
-    
-    .header-center {
-        display: flex;
-        width: 100%;
-        gap: 10px;
+    /* Achicamos un poco el título principal para ganar espacio vertical */
+    header h1 {
+        font-size: 2.5rem !important;
+        margin-bottom: 5px !important;
     }
 
-    /* Ocultamos Live, Backtest y el texto de "Actualizado" */
-    #tab-live, 
-    #tab-backtest,
+    /* Ocultamos los botones que no van (Live, Backtest) y el texto de estado */
+    button[onclick*="showLive"], 
+    button[onclick*="showBacktest"],
     #header-status {
         display: none !important;
     }
 
-    .header-right {
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-        width: 100%;
-        gap: 10px;
-    }
-
-    /* Forzamos a que ocupen 50/50 y el texto no se rompa */
+    /* Ponemos el selector y el botón de tema estrictamente en la misma línea */
     #bot-selector, 
-    .header-right .nav-btn {
-        width: 50%;
-        justify-content: center;
-        margin-bottom: 0;
-        padding: 10px 4px;
-        font-size: 0.8rem;
-        white-space: nowrap; /* Evita que el texto baje a otra línea */
-        overflow: hidden;
-        text-overflow: ellipsis; /* Si no entra, pone 3 puntitos */
+    button[onclick*="toggleTheme"] {
+        display: inline-block !important;
+        width: 48% !important; /* Cada uno ocupa casi la mitad */
+        margin: 5px 0.5% !important; /* Un mini margen para que no se peguen */
+        padding: 12px 2px !important; /* Padding ajustado */
+        font-size: 0.8rem !important;
+        vertical-align: middle !important;
+        
+        /* Evita que el texto se rompa en dos líneas */
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        box-sizing: border-box !important;
     }
 }
 </style>
