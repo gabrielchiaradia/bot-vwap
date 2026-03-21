@@ -152,6 +152,20 @@
 
   @media(max-width:900px){.chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}main{padding:16px}header{padding:16px}.pos-row{grid-template-columns:1fr 1fr;font-size:10px}}
   footer{border-top:1px solid var(--border);padding:16px 32px;color:var(--muted);font-size:10px;display:flex;justify-content:space-between;align-items:center}
+  /* 📱 AJUSTES PARA CELULARES */
+@media (max-width: 768px) {
+    /* Achicamos un poco el título principal para que no ocupe media pantalla */
+    h1 {
+        font-size: 2.5rem !important; 
+    }
+    
+    /* Hacemos que los botones ocupen todo el ancho y se apilen prolijos */
+    .nav-btn {
+        width: 100%;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+}
 </style>
 </head>
 <body>
