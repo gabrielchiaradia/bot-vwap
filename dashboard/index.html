@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Scalping Bot v3 — Dashboard</title>
+<title>VWAP Bot v3 — Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -119,6 +119,36 @@
   .file-btn{padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;transition:all .2s}
   .file-btn:hover{border-color:var(--accent);color:var(--accent)}
   .file-btn.active{background:var(--accent);color:#000;border-color:var(--accent)}
+  /* DISEÑO DE BOTONES DE NAVEGACIÓN Y TEMA */
+  .nav-btn {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .nav-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(88, 166, 255, 0.05);
+    transform: translateY(-1px);
+  }
+
+  .nav-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  
 
   @media(max-width:900px){.chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}main{padding:16px}header{padding:16px}.pos-row{grid-template-columns:1fr 1fr;font-size:10px}}
   footer{border-top:1px solid var(--border);padding:16px 32px;color:var(--muted);font-size:10px;display:flex;justify-content:space-between;align-items:center}
@@ -130,17 +160,17 @@
   <div class="logo">
     <div class="logo-icon">⚡</div>
     <div>
-      <div class="logo-text">SCALPING <span>V3</span></div>
+      <div class="logo-text">VWAP <span>V3</span></div>
       <div style="color:var(--muted);font-size:10px;margin-top:2px">Retest + OB · Binance Futures</div>
     </div>
   </div>
   <div class="header-center">
-    <button class="mode-tab active" id="tab-live" onclick="switchMode('live')">● Live</button>
-    <button class="mode-tab" id="tab-backtest" onclick="switchMode('backtest')">⬡ Backtest</button>
+    <button class="nav-btn" id="tab-live" onclick="switchMode('live')">🟢 Bot en Vivo</button>
+    <button class="nav-btn" id="tab-backtest" onclick="switchMode('backtest')">📂 Ver Backtests</button>
   </div>
   <div class="header-right">
     <span id="header-status" style="font-size:10px;color:var(--muted)"></span>
-    <button class="header-btn" id="theme-btn" onclick="toggleTheme()" title="Tema">🌓</button>
+    <button class="nav-btn" style="width: auto; height: auto; overflow: visible; text-indent: 0;" onclick="toggleTheme()">🌓 Cambiar Tema</button>
   </div>
 </header>
 <div class="refresh-bar"><div class="refresh-fill" id="refreshFill"></div></div>
@@ -274,7 +304,7 @@
 </div>
 
 </main>
-<footer><span>Scalping Bot v3 · Dashboard v4.0</span><span id="footer-info"></span></footer>
+<footer><span>VWAP Bot v3 · Dashboard v4.0</span><span id="footer-info"></span></footer>
 
 <script>
 // ══════════════════════════════════════════════════════════
