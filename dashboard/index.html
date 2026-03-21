@@ -167,6 +167,10 @@
   <div class="header-center">
     <button class="nav-btn" id="tab-live" onclick="switchMode('live')">🟢 Bot en Vivo</button>
     <button class="nav-btn" id="tab-backtest" onclick="switchMode('backtest')">📂 Ver Backtests</button>
+    <select id="bot-selector" class="nav-btn" onchange="cambiarBotSeleccionado(this.value)" style="cursor: pointer; appearance: auto;">
+        <option value="ETH">💎 Bot ETH</option>
+        <option value="BTC">🪙 Bot BTC</option>
+    </select>
   </div>
   <div class="header-right">
     <span id="header-status" style="font-size:10px;color:var(--muted)"></span>
@@ -318,6 +322,18 @@ let _refreshTimer = null;
 let _refreshInterval = 30;
 let _isOnServer = false;
 
+// Variable global que guarda qué bot estamos mirando
+let botActivo = 'ETH'; 
+
+// Función que se ejecuta cuando cambiás el desplegable
+function cambiarBotSeleccionado(nuevoBot) {
+    botActivo = nuevoBot;
+    console.log("Cambiando vista a:", botActivo);
+    
+    // Forzamos a que vuelva a cargar los datos del nuevo bot al instante
+    fetchLiveData(); 
+}
+
 // Backtest
 let _allVariants = [], _activeIdx = 0, _origTrades = [];
 
@@ -454,10 +470,9 @@ function animateRefreshBar() {
 //  LIVE: FETCH
 // ══════════════════════════════════════════════════════════
 async function fetchLiveData() {
-  const botActivo = 'ETH'; // Cambiá a 'BTC' si querés ver el otro bot
   try {
     const [trRes, posRes, stRes] = await Promise.allSettled([
-      // Cambiamos _scalp.json por los archivos reales del bot
+      // Acá ya toma el valor nuevo ('ETH' o 'BTC') automáticamente
       fetch(`/data/dashboard_trades_${botActivo}.json?t=` + Date.now()),
       fetch(`/data/open_positions_${botActivo}.json?t=` + Date.now()),
       fetch(`/data/bot_status_${botActivo}.json?t=` + Date.now()),
@@ -472,7 +487,7 @@ async function fetchLiveData() {
     }
     if (stRes.status === 'fulfilled' && stRes.value.ok) {
       renderStatus(await stRes.value.json());
-      // Esto cambia el punto rojo a verde cuando engancha el archivo
+      // Esto cambia el punto rojo a verde y actualiza el texto
       document.getElementById('liveLabel').textContent = `Conectado a ${botActivo}`;
       document.getElementById('liveDot').className = 'live-dot on';
     }
