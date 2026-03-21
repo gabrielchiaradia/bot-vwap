@@ -11,6 +11,7 @@ venv/
 # Datos compartidos (Dashboard)
 dashboard/data/*.json
 backtest/data/*.csv
+backtest/
 
 # SO
 .DS_Store
