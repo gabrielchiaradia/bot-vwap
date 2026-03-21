@@ -154,30 +154,40 @@
   footer{border-top:1px solid var(--border);padding:16px 32px;color:var(--muted);font-size:10px;display:flex;justify-content:space-between;align-items:center}
  /* 📱 AJUSTES PARA CELULARES */
 @media (max-width: 768px) {
-    /* Achicamos un poco el título principal para ganar espacio vertical */
-    header h1 {
-        font-size: 2.5rem !important;
-        margin-bottom: 5px !important;
+    /* 1. Cambiamos el header para que no intente meter todo en una fila */
+    header {
+        display: block !important;
+        padding: 15px 15px 10px 15px !important;
+    }
+    
+    /* 2. El logo ocupa su propia línea arriba de todo, centrado */
+    .logo {
+        margin-bottom: 15px !important;
+        justify-content: center !important; 
     }
 
-    /* Ocultamos los botones que no van (Live, Backtest) y el texto de estado */
-    button[onclick*="showLive"], 
-    button[onclick*="showBacktest"],
+    /* 3. Volvemos "invisibles" a las cajas contenedoras para poder juntar los botones */
+    .header-center, .header-right {
+        display: inline !important; 
+    }
+
+    /* 4. Ocultamos los botones de Live, Backtest y el texto de "Actualizado" */
+    #tab-live, 
+    #tab-backtest,
     #header-status {
         display: none !important;
     }
 
-    /* Ponemos el selector y el botón de tema estrictamente en la misma línea */
+    /* 5. Obligamos al selector y al tema a ponerse en la misma línea (48% y 48%) */
     #bot-selector, 
     button[onclick*="toggleTheme"] {
         display: inline-block !important;
-        width: 48% !important; /* Cada uno ocupa casi la mitad */
-        margin: 5px 0.5% !important; /* Un mini margen para que no se peguen */
-        padding: 12px 2px !important; /* Padding ajustado */
+        width: 48% !important; 
+        margin: 0 1% !important; 
+        padding: 12px 0 !important; 
         font-size: 0.8rem !important;
-        vertical-align: middle !important;
-        
-        /* Evita que el texto se rompa en dos líneas */
+        text-align: center !important;
+        vertical-align: top !important;
         white-space: nowrap !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
