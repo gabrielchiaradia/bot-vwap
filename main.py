@@ -90,6 +90,9 @@ def main():
 
     cycle_count = 0
     while True:
+        logger.info("="*50)
+        logger.info(f"  BOT {BOT_NAME}  R/R: {TP_RR_RATIO} Riesgo: {RISK_PER_TRADE}%")
+        logger.info("="*50)
         run_cycle(client, cycle_count)
         cycle_count += 1      
         time.sleep(60)  # Esperamos al cierre del minuto para recalcular bandas
