@@ -13,6 +13,7 @@ dashboard/data/*.json
 backtest/data/*.csv
 backtest/*.json
 backtest/results/*.json
+backtest
 
 # SO
 .DS_Store
