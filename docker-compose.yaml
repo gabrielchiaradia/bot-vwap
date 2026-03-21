@@ -67,6 +67,6 @@ services:
       - ./dashboard/index.html:/usr/share/nginx/html/index.html:ro
       - ./dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./dashboard/data:/usr/share/nginx/html/data:ro
-      - ./backtest:/usr/share/nginx/html/backtest:ro
+      - ./backtest/results:/usr/share/nginx/html/backtest:ro
     
       
