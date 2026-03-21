@@ -10,10 +10,11 @@ venv/
 
 # Datos compartidos (Dashboard)
 dashboard/data/*.json
-backtest/data/*.csv
-backtest/*.json
+
+# ── Resultados de backtest ────────────────────
 backtest/results/*.json
-backtest
+backtest/results/*.csv
+# (mantener solo el directorio vacío con .gitkeep)
 
 # SO
 .DS_Store
