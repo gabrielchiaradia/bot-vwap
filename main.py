@@ -18,14 +18,12 @@ from src.notifier import alert_trade_open, alert_trade_close, alert_error
 
 def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
     try:
-        logger.info("  [1] ")
         balance = get_futures_balance(client)
         check_drawdown_alert(balance)
         
         # Revisar posiciones abiertas para el dashboard
         pos_abierta = get_open_position(client, SYMBOL)
         open_count = 1 if pos_abierta else 0
-        logger.info("  [2] ")
         # 1. Obtenemos datos y calculamos bandas
         candles = client.futures_klines(symbol=SYMBOL, interval='1m', limit=500)
         df = pd.DataFrame(candles, columns=['timestamp','open','high','low','close','volume','ct','qav','tr','tba','tqa','i'])
@@ -34,15 +32,11 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         df[cols] = df[cols].astype(float)
         
         df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
-        logger.info("  [3] ")
         # 2. Generar Señales
         signal, entry_price, limit_price = get_vwap_signals(df_bands)
-        logger.info("  [4] ")
         # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
-        #exportar_status(balance, cycle_count, open_count)
-        logger.info("  [5] ")
+        exportar_status(balance, cycle_count, open_count)
         exportar_dashboard()
-        logger.info("  [6] ")
         # 3. Lógica de Entrada (Ejemplo simplificado)
         if signal and open_count == 0:
             # Calculamos SL y TP basándonos en la Desviación Estándar (Volatilidad)
