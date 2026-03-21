@@ -635,7 +635,7 @@ function filtrarLive(f, btn) {
 // ══════════════════════════════════════════════════════════
 async function cargarServerFiles() {
   try {
-    const res = await fetch('/backtest/results/'); if (!res.ok) return;
+    const res = await fetch('/backtest/'); if (!res.ok) return;
     const files = await res.json();
     const jsonFiles = files.filter(f => f.name && f.name.endsWith('.json')).map(f => f.name);
     if (!jsonFiles.length) return;
@@ -648,7 +648,7 @@ async function cargarServerFile(name, btn) {
   try {
     document.querySelectorAll('.file-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const data = await (await fetch('/backtest/results/' + name)).json();
+    const data = await (await fetch('/backtest/' + name)).json();
     procesarJSON(data, name);
   } catch (e) { alert('Error: ' + e.message); }
 }
