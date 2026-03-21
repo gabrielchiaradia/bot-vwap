@@ -94,7 +94,9 @@ def main():
         logger.info(f"  BOT {BOT_NAME}  R/R: {TP_RR_RATIO} Riesgo: {RISK_PER_TRADE}%")
         logger.info(F"  Bot corriendo daunte {cycle_count} minutos")
         logger.info("="*50)
+        logger.info("Iniciando ciclo...")
         run_cycle(client, cycle_count)
+        logger.info("Ciclo finalizado, esperando 60s...")
         cycle_count += 1      
         time.sleep(60)  # Esperamos al cierre del minuto para recalcular bandas
 
