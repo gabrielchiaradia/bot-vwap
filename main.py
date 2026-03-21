@@ -37,11 +37,12 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         logger.info("  [3] ")
         # 2. Generar Señales
         signal, entry_price, limit_price = get_vwap_signals(df_bands)
-        
+        logger.info("  [4] ")
         # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
         exportar_status(balance, cycle_count, open_count)
+        logger.info("  [5] ")
         exportar_dashboard()
-        logger.info("  [4] ")
+        logger.info("  [6] ")
         # 3. Lógica de Entrada (Ejemplo simplificado)
         if signal and open_count == 0:
             # Calculamos SL y TP basándonos en la Desviación Estándar (Volatilidad)
