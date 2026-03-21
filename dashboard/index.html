@@ -7,8 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  :root,[data-theme="dark"]{--bg:#080c10;--surface:#0d1117;--surface2:#131b24;--border:#1e2d3d;--accent:#f59e0b;--accent2:#7c3aed;--green:#00e676;--red:#ff3d57;--yellow:#ffd600;--text:#c9d1d9;--text-strong:#fff;--muted:#4a5568;--glow:0 0 20px rgba(245,158,11,.15);--header-grad:linear-gradient(180deg,#0a1520 0%,var(--bg) 100%);--tooltip-bg:#0d1117;--tooltip-border:#1e2d3d;--tooltip-title:#f59e0b;--tooltip-body:#c9d1d9;--chart-grid:rgba(30,45,61,.7);--chart-green-bar:rgba(0,230,118,.7);--chart-red-bar:rgba(255,61,87,.7);--chart-yellow-bar:rgba(255,214,0,.5);--chart-accent-fill-0:rgba(245,158,11,.3);--chart-accent-fill-1:rgba(245,158,11,.01);--logo-glow-in:rgba(245,158,11,.1);--logo-glow-out:rgba(245,158,11,.3);--scanline:rgba(0,0,0,.04);--row-active:rgba(245,158,11,.12)}
-  [data-theme="light"]{--bg:#f5f5f7;--surface:#fff;--surface2:#eef0f4;--border:#d1d5db;--accent:#d97706;--accent2:#6d28d9;--green:#16a34a;--red:#dc2626;--yellow:#ca8a04;--text:#1f2937;--text-strong:#000;--muted:#6b7280;--glow:0 0 20px rgba(217,119,6,.08);--header-grad:linear-gradient(180deg,#e8eaef 0%,var(--bg) 100%);--tooltip-bg:#fff;--tooltip-border:#d1d5db;--tooltip-title:#d97706;--tooltip-body:#1f2937;--chart-grid:rgba(0,0,0,.06);--chart-green-bar:rgba(22,163,74,.7);--chart-red-bar:rgba(220,38,38,.7);--chart-yellow-bar:rgba(202,138,4,.5);--chart-accent-fill-0:rgba(217,119,6,.2);--chart-accent-fill-1:rgba(217,119,6,.01);--logo-glow-in:rgba(217,119,6,.1);--logo-glow-out:rgba(217,119,6,.15);--scanline:rgba(0,0,0,.015);--row-active:rgba(217,119,6,.1)}
+  :root,[data-theme="dark"]{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--accent:#00d2ff;--accent2:#0ea5e9;--green:#3fb950;--red:#f85149;--yellow:#ffd600;--text:#8b949e;--text-strong:#c9d1d9;--muted:#4a5568;--glow:0 0 20px rgba(56, 189, 248, 0.15);--header-grad:linear-gradient(180deg,#0a1520 0%,var(--bg) 100%);--tooltip-bg:#0d1117;--tooltip-border:#1e2d3d;--tooltip-title:#38bdf8;--tooltip-body:#c9d1d9;--chart-grid:rgba(30,45,61,.7);--chart-green-bar:rgba(0,230,118,.7);--chart-red-bar:rgba(255,61,87,.7);--chart-yellow-bar:rgba(255,214,0,.5);--chart-accent-fill-0:rgba(56, 189, 248, 0.2);--chart-accent-fill-1:rgba(56, 189, 248, 0.01);--logo-glow-in:rgba(56, 189, 248, 0.1);--logo-glow-out:rgba(56, 189, 248, 0.2);--scanline:rgba(255,255,255,0.01));--row-active:rgba(56, 189, 248, 0.08)}
+  [data-theme="light"]{--bg:#f5f5f7;--surface:#fff;--surface2:#eef0f4;--border:#d1d5db;--accent:#00d2ff;--accent2:#0ea5e9;--green:#16a34a;--red:#dc2626;--yellow:#ca8a04;--text:#1f2937;--text-strong:#000;--muted:#6b7280;--glow:0 0 20px rgba(56, 189, 248, 0.15);--header-grad:linear-gradient(180deg,#e8eaef 0%,var(--bg) 100%);--tooltip-bg:#fff;--tooltip-border:#d1d5db;--tooltip-title:#38bdf8;--tooltip-body:#1f2937;--chart-grid:rgba(0,0,0,.06);--chart-green-bar:rgba(22,163,74,.7);--chart-red-bar:rgba(220,38,38,.7);--chart-yellow-bar:rgba(202,138,4,.5);--chart-accent-fill-0:rgba(56, 189, 248, 0.2);--chart-accent-fill-1:rgba(56, 189, 248, 0.01);--logo-glow-in:rgba(56, 189, 248, 0.1);--logo-glow-out:rgba(56, 189, 248, 0.2);--scanline:rgba(0,0,0,.015);--row-active:rgba(56, 189, 248, 0.08)}
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;min-height:100vh}
   body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scanline) 2px,var(--scanline) 4px);pointer-events:none;z-index:9999}
@@ -20,8 +20,33 @@
   @keyframes pulse{0%,100%{box-shadow:var(--glow),inset 0 0 12px var(--logo-glow-in)}50%{box-shadow:0 0 30px var(--logo-glow-out),inset 0 0 20px var(--logo-glow-in)}}
   .logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:18px}.logo-text span{color:var(--accent)}
   .header-center{display:flex;gap:4px}
-  .mode-tab{padding:8px 16px;border-radius:6px;font: size 12px;;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-weight:600;transition:all .2s;letter-spacing:.05em}
-  .mode-tab.active{border-color:var(--accent);color:var(--accent);background:rgba(245,158,11,.08)}
+  .mode-tab {
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--surface2); /* Un gris oscuro de fondo */
+  color: var(--muted);        /* Texto apagado cuando no está seleccionado */
+  border: 1px solid var(--border);
+  font-weight: 600;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* EL CAMBIO CLAVE: Cuando el botón está activo o pasas el mouse */
+.mode-tab.active, .mode-tab:hover {
+  background: rgba(0, 210, 255, 0.1); /* Fondo azul traslúcido */
+  color: var(--accent);               /* Texto en tu nuevo azul */
+  border-color: var(--accent);        /* Borde azul */
+  box-shadow: 0 0 15px rgba(0, 210, 255, 0.2); /* Un sutil resplandor */
+}
+
+/* El símbolo ⬡ que brille un poquito más */
+.mode-tab.active::before {
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent);
+}
   .header-right{display:flex;align-items:center;gap:10px}
   .header-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;line-height:1;color:var(--text);transition:all .2s;display:grid;place-items:center}
   .header-btn:hover{border-color:var(--accent)}
@@ -71,19 +96,37 @@
   th .sort-arrow{display:inline-block;margin-left:4px;font-size:8px;opacity:.4;transition:opacity .2s}
   th.sort-active .sort-arrow{opacity:1;color:var(--accent)}
   td{padding:10px 16px;border-bottom:1px solid rgba(30,45,61,.5);font-size:12px}
-  tr:last-child td{border-bottom:none}tr:hover td{background:rgba(245,158,11,.03)}
-  .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em}
-  .badge-win{background:rgba(0,230,118,.15);color:var(--green);border:1px solid rgba(0,230,118,.3)}
-  .badge-loss{background:rgba(255,61,87,.15);color:var(--red);border:1px solid rgba(255,61,87,.3)}
-  .badge-open{background:rgba(245,158,11,.15);color:var(--accent);border:1px solid rgba(245,158,11,.3)}
-  .badge-long{background:rgba(245,158,11,.1);color:var(--accent);border:1px solid rgba(245,158,11,.3)}
-  .badge-short{background:rgba(124,58,237,.1);color:#a78bfa;border:1px solid rgba(124,58,237,.3)}
-  .badge-bias{background:rgba(255,214,0,.1);color:var(--yellow);border:1px solid rgba(255,214,0,.3);font-size:9px}
-  .pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}
-  .filter-tabs{display:flex;gap:8px}
-  .filter-tab{padding:4px 12px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);transition:all .2s}
-  .filter-tab.active,.filter-tab:hover{border-color:var(--accent);color:var(--accent);background:rgba(245,158,11,.08)}
+ /* Filas de la tabla: Hover en azul */
+tr:last-child td { border-bottom: none }
+tr:hover td { background: var(--row-active) } /* Usamos la variable que definimos antes */
 
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .05em }
+
+/* Ganancias y Pérdidas (Se quedan igual, verde y rojo) */
+.badge-win { background: rgba(0, 230, 118, .1); color: var(--green); border: 1px solid rgba(0, 230, 118, .2) }
+.badge-loss { background: rgba(255, 61, 87, .1); color: var(--red); border: 1px solid rgba(255, 61, 87, .2) }
+
+/* BADGES DE OPERACIÓN: Ahora en AZUL */
+.badge-open { background: rgba(0, 210, 255, .1); color: var(--accent); border: 1px solid rgba(0, 210, 255, .2) }
+.badge-long { background: rgba(0, 210, 255, .05); color: var(--accent); border: 1px solid rgba(0, 210, 255, .2) }
+
+/* SHORT: Lo dejé en violeta suave, pero si lo querés más azulado avisame */
+.badge-short { background: rgba(124, 58, 237, .1); color: #a78bfa; border: 1px solid rgba(124, 58, 237, .2) }
+.badge-bias { background: rgba(255, 214, 0, .1); color: var(--yellow); border: 1px solid rgba(255, 214, 0, .2); font-size: 9px }
+
+.pnl-pos { color: var(--green); font-weight: 700 }
+.pnl-neg { color: var(--red); font-weight: 700 }
+
+.filter-tabs { display: flex; gap: 8px }
+
+/* PESTAÑAS DE FILTRO: Adiós al naranja en el hover */
+.filter-tab { padding: 4px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); transition: all .2s }
+
+.filter-tab.active, .filter-tab:hover { 
+    border-color: var(--accent); 
+    color: var(--text-strong); /* El texto ahora brilla más cuando pasás el mouse */
+    background: var(--row-active); /* Fondo azul tenue al pasar el mouse */
+}
   /* ── BIAS GRID ── */
   .bias-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:28px}
   .bias-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
@@ -122,6 +165,46 @@
 
   @media(max-width:900px){.chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}main{padding:16px}header{padding:16px}.pos-row{grid-template-columns:1fr 1fr;font-size:10px}}
   footer{border-top:1px solid var(--border);padding:16px 32px;color:var(--muted);font-size:10px;display:flex;justify-content:space-between;align-items:center}
+/* Configuración para Celulares */
+@media (max-width: 768px) {
+      /* 1. Ocultar Tema, Backtest y el Status del Header */
+      #theme-btn, 
+      #tab-backtest,
+      #tab-live,
+      #header-status { 
+          display: none !important; 
+      }
+
+      /* 2. Forzar que el selector de BOT sea visible y grande */
+      /* Usamos 'select' para asegurar que agarre el componente de la lista */
+      select, .bot-selector, #botSelect {
+          display: block !important; /* Lo despertamos por si estaba oculto */
+          width: 100% !important;
+          height: 50px !important;
+          font-size: 16px !important;
+          background-color: var(--surface) !important;
+          color: var(--accent) !important;
+          border: 2px solid var(--accent) !important;
+          border-radius: 10px !important;
+          margin: 15px 0 !important;
+          padding: 0 10px !important;
+          cursor: pointer;
+      }
+
+      /* 3. Limpiamos el Header para que no robe espacio */
+      header {
+          padding: 5px 10px !important;
+          text-align: center !important;
+      }
+      
+      .logo {
+          font-size: 1.2rem !important;
+          margin-bottom: 5px;
+      }
+  }
+
+
+
 </style>
 </head>
 <body>
