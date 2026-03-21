@@ -16,81 +16,66 @@ from src.journal import record_open, record_close, _load
 from src.live_writer import exportar_dashboard, exportar_status
 from src.notifier import alert_trade_open, alert_trade_close, alert_error
 
-def run_cycle(client):
-    """Ciclo principal de ejecución (ejecutado cada ~60 segundos)"""
+def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
     try:
-        # 1. Actualizar Datos y Estado
         balance = get_futures_balance(client)
-        check_drawdown_alert(balance) # Alerta si cae > 10%
+        check_drawdown_alert(balance)
         
-        # 2. Obtener velas (1m) para calcular VWAP
-        # Pedimos 500 velas para tener suficiente historial del día
+        # Revisar posiciones abiertas para el dashboard
+        pos_abierta = get_open_position(client, SYMBOL)
+        open_count = 1 if pos_abierta else 0
+        
+        # 1. Obtenemos datos y calculamos bandas
         candles = client.futures_klines(symbol=SYMBOL, interval='1m', limit=500)
-        df = pd.DataFrame(candles, columns=[
-            'open_time', 'open', 'high', 'low', 'close', 'volume',
-            'close_time', 'qav', 'num_trades', 'taker_base_vol', 'taker_quote_vol', 'ignore'
-        ])
-        df['open_time'] = pd.to_datetime(df['open_time'], unit='ms')
-        for col in ['high', 'low', 'close', 'volume']:
-            df[col] = df[col].astype(float)
-
-        # 3. Calcular Estrategia
-        df = calculate_vwap_bands(df, mult=BAND_MULT)
-        signals = get_vwap_signals(df)
+        df = pd.DataFrame(candles, columns=['timestamp','open','high','low','close','volume','ct','qav','tr','tba','tqa','i'])
+        df['open_time'] = pd.to_datetime(df['timestamp'], unit='ms')
+        cols = ['open','high','low','close','volume']
+        df[cols] = df[cols].astype(float)
         
-        # 4. Verificar posición actual
-        pos = get_open_position(client, SYMBOL)
+        df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
         
-        if pos:
-            # ESTAMOS DENTRO: Monitorear si se cerró por SL o TP
-            # Nota: El SL/TP en Binance cierra la posición automáticamente.
-            # Solo exportamos estado al dashboard
-            exportar_status(balance, cycle_count=0, open_count=1)
-            exportar_dashboard()
-            logger.debug(f"[{BOT_ID}] Posición abierta detectada. Monitoreando...")
-            return
-
-        # 5. NO ESTAMOS DENTRO: Gestionar órdenes LIMIT ("Pescar")
-        trades_history = _load()
-        if not can_trade(trades_history):
-            logger.warning(f"[{BOT_ID}] Cortacircuitos activo (2 losses hoy). Esperando mañana.")
-            cancel_all_open_orders(client, SYMBOL)
-            return
-
-        # Calculamos los niveles para la nueva orden LIMIT
-        # Estrategia: Comprar en banda inferior, TP en VWAP.
-        entry_price = signals['lower']
-        vwap_price = signals['vwap']
+        # 2. Generar Señales
+        signal, entry_price, limit_price = get_vwap_signals(df_bands)
         
-        # Distancia para el SL basado en el RR
-        dist_to_tp = vwap_price - entry_price
-        sl_price = entry_price - (dist_to_tp * TP_RR_RATIO)
-
-        # Si el precio actual está muy cerca o ya cruzó, no ponemos la orden este minuto
-        last_close = df['close'].iloc[-1]
-        if last_close <= entry_price:
-            logger.info(f"[{BOT_ID}] El precio ya está en la zona de compra. Esperando estabilización.")
-            return
-
-        # 6. Actualizar "Anzuelo" (Cancel & Replace)
-        cancel_all_open_orders(client, SYMBOL)
-        
-        qty = calculate_quantity(client, entry_price)
-        if qty > 0:
-            order = place_limit_order(client, SYMBOL, "BUY", entry_price, qty)
-            
-            if order and order.get('status') == 'FILLED':
-                # Si se llenó instantáneamente (Market fallback)
-                trade_id = str(uuid.uuid4())[:8]
-                record_open(trade_id, SYMBOL, "LONG", entry_price, sl_price, vwap_price, qty, RISK_PER_TRADE)
-                place_sl_tp(client, SYMBOL, "BUY", qty, sl_price, vwap_price)
-                alert_trade_open(SYMBOL, "LONG", entry_price, sl_price, vwap_price, RISK_PER_TRADE)
-
-        # Actualizar Dashboard
-        exportar_status(balance, cycle_count=0, open_count=0)
+        # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
+        exportar_status(balance, cycle_count, open_count)
         exportar_dashboard()
 
+        # 3. Lógica de Entrada (Ejemplo simplificado)
+        if signal and open_count == 0:
+            # Calculamos SL y TP basándonos en la Desviación Estándar (Volatilidad)
+            last_row = df_bands.iloc[-1]
+            dist_sl = last_row['std_dev'] * 1.5
+            
+            if signal == "LONG":
+                sl_price = entry_price - dist_sl
+                tp_price = entry_price + (dist_sl * TP_RR_RATIO)
+                side = "BUY"
+            else:
+                sl_price = entry_price + dist_sl
+                tp_price = entry_price - (dist_sl * TP_RR_RATIO)
+                side = "SELL"
+                
+            qty = calculate_quantity(client, entry_price)
+            
+            if qty > 0:
+                cancel_all_open_orders(client, SYMBOL)
+                order = place_limit_order(client, SYMBOL, side, entry_price, qty)
+                
+                if order and order.get('status') == 'FILLED':
+                    trade_id = str(uuid.uuid4())[:8]
+                    # ACÁ mandamos el tp_price real calculado con el RR, no el VWAP
+                    record_open(trade_id, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE)
+                    place_sl_tp(client, SYMBOL, side, qty, sl_price, tp_price)
+                    alert_trade_open(SYMBOL, signal, entry_price, sl_price, tp_price, RISK_PER_TRADE)
+                    
+                    # Forzar refresh del dashboard al abrir trade
+                    exportar_status(balance, cycle_count, 1)
+                    exportar_dashboard()
+
     except Exception as e:
+        logger.error(f"Error en ciclo {SYMBOL}: {e}")
+        alert_error(f"Ciclo {SYMBOL}", str(e))
         logger.error(f"Error en ciclo {SYMBOL}: {e}")
         alert_error(f"Ciclo {SYMBOL}", str(e))
 
@@ -104,9 +89,13 @@ def main():
     set_leverage(client, SYMBOL)
 
     while True:
-        run_cycle(client)
-        # Esperamos al cierre del minuto para recalcular bandas
-        time.sleep(60)
+        run_cycle(client, cycle_count)
+        cycle_count += 1      
+        time.sleep(60)  # Esperamos al cierre del minuto para recalcular bandas
 
 if __name__ == "__main__":
     main()
+
+   
+
+        
