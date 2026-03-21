@@ -153,8 +153,8 @@
   @media(max-width:900px){.chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}main{padding:16px}header{padding:16px}.pos-row{grid-template-columns:1fr 1fr;font-size:10px}}
   footer{border-top:1px solid var(--border);padding:16px 32px;color:var(--muted);font-size:10px;display:flex;justify-content:space-between;align-items:center}
  /* 📱 AJUSTES PARA CELULARES */
+/* 📱 AJUSTES PARA CELULARES */
 @media (max-width: 768px) {
-    /* Hacemos que el encabezado apile los elementos uno abajo del otro */
     header {
         flex-direction: column;
         align-items: stretch;
@@ -162,25 +162,35 @@
         padding: 15px;
     }
     
-    /* Contenedores de botones al 100% del ancho */
-    .header-center, .header-right {
-        flex-direction: column;
+    .header-center {
+        display: flex;
         width: 100%;
         gap: 10px;
     }
 
-    /* Ocultamos los botones de Live y Backtest en celulares */
+    /* Ocultamos Live y Backtest */
     #tab-live, 
     #tab-backtest {
         display: none !important;
     }
 
-    /* Los botones y el selector que quedan visibles ocupan todo el ancho */
-    .nav-btn, 
-    #bot-selector {
+    /* Ponemos el selector y el botón de tema en la misma fila */
+    .header-right {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
         width: 100%;
+        gap: 10px;
+    }
+
+    /* Hacemos que cada uno ocupe la mitad del ancho */
+    #bot-selector, 
+    .header-right .nav-btn {
+        width: 50%;
         justify-content: center;
         margin-bottom: 0;
+        padding: 10px 5px; /* Un poco menos de padding lateral para que no se apriete el texto */
+        font-size: 0.85rem; /* Achicamos un pelo la letra para asegurarnos de que entre bien */
     }
 }
 </style>
