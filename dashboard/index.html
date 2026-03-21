@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VWAP Bot v3 — Dashboard</title>
+<title>Scalping Bot v3 — Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  :root,[data-theme="dark"]{--bg:#151b23;--surface:#1e2631;--surface2:#293441;--border:#3e4c5e;--accent:#f59e0b;--accent2:#7c3aed;--green:#00e676;--red:#ff3d57;--yellow:#ffd600;--text:#c9d1d9;--text-strong:#fff;--muted:#728396;--glow:0 0 20px rgba(245,158,11,.15);--header-grad:linear-gradient(180deg,#1a212b 0%,var(--bg) 100%);--tooltip-bg:#1e2631;--tooltip-border:#3e4c5e}
+  :root,[data-theme="dark"]{--bg:#080c10;--surface:#0d1117;--surface2:#131b24;--border:#1e2d3d;--accent:#f59e0b;--accent2:#7c3aed;--green:#00e676;--red:#ff3d57;--yellow:#ffd600;--text:#c9d1d9;--text-strong:#fff;--muted:#4a5568;--glow:0 0 20px rgba(245,158,11,.15);--header-grad:linear-gradient(180deg,#0a1520 0%,var(--bg) 100%);--tooltip-bg:#0d1117;--tooltip-border:#1e2d3d;--tooltip-title:#f59e0b;--tooltip-body:#c9d1d9;--chart-grid:rgba(30,45,61,.7);--chart-green-bar:rgba(0,230,118,.7);--chart-red-bar:rgba(255,61,87,.7);--chart-yellow-bar:rgba(255,214,0,.5);--chart-accent-fill-0:rgba(245,158,11,.3);--chart-accent-fill-1:rgba(245,158,11,.01);--logo-glow-in:rgba(245,158,11,.1);--logo-glow-out:rgba(245,158,11,.3);--scanline:rgba(0,0,0,.04);--row-active:rgba(245,158,11,.12)}
   [data-theme="light"]{--bg:#f5f5f7;--surface:#fff;--surface2:#eef0f4;--border:#d1d5db;--accent:#d97706;--accent2:#6d28d9;--green:#16a34a;--red:#dc2626;--yellow:#ca8a04;--text:#1f2937;--text-strong:#000;--muted:#6b7280;--glow:0 0 20px rgba(217,119,6,.08);--header-grad:linear-gradient(180deg,#e8eaef 0%,var(--bg) 100%);--tooltip-bg:#fff;--tooltip-border:#d1d5db;--tooltip-title:#d97706;--tooltip-body:#1f2937;--chart-grid:rgba(0,0,0,.06);--chart-green-bar:rgba(22,163,74,.7);--chart-red-bar:rgba(220,38,38,.7);--chart-yellow-bar:rgba(202,138,4,.5);--chart-accent-fill-0:rgba(217,119,6,.2);--chart-accent-fill-1:rgba(217,119,6,.01);--logo-glow-in:rgba(217,119,6,.1);--logo-glow-out:rgba(217,119,6,.15);--scanline:rgba(0,0,0,.015);--row-active:rgba(217,119,6,.1)}
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;min-height:100vh}
@@ -20,7 +20,7 @@
   @keyframes pulse{0%,100%{box-shadow:var(--glow),inset 0 0 12px var(--logo-glow-in)}50%{box-shadow:0 0 30px var(--logo-glow-out),inset 0 0 20px var(--logo-glow-in)}}
   .logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:18px}.logo-text span{color:var(--accent)}
   .header-center{display:flex;gap:4px}
-  .mode-tab{padding:6px 16px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-weight:600;transition:all .2s;letter-spacing:.05em}
+  .mode-tab{padding:8px 16px;border-radius:6px;font: size 12px;;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:inherit;font-weight:600;transition:all .2s;letter-spacing:.05em}
   .mode-tab.active{border-color:var(--accent);color:var(--accent);background:rgba(245,158,11,.08)}
   .header-right{display:flex;align-items:center;gap:10px}
   .header-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:14px;line-height:1;color:var(--text);transition:all .2s;display:grid;place-items:center}
@@ -119,105 +119,32 @@
   .file-btn{padding:6px 14px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:inherit;transition:all .2s}
   .file-btn:hover{border-color:var(--accent);color:var(--accent)}
   .file-btn.active{background:var(--accent);color:#000;border-color:var(--accent)}
-  /* DISEÑO DE BOTONES DE NAVEGACIÓN Y TEMA */
-  .nav-btn {
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border);
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: bold;
-    font-size: 0.9rem;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.2s ease;
-  }
-
-  .nav-btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: rgba(88, 166, 255, 0.05);
-    transform: translateY(-1px);
-  }
-
-  .nav-btn.active {
-    background: var(--accent);
-    color: #fff;
-    border-color: var(--accent);
-  }
-  
 
   @media(max-width:900px){.chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}main{padding:16px}header{padding:16px}.pos-row{grid-template-columns:1fr 1fr;font-size:10px}}
   footer{border-top:1px solid var(--border);padding:16px 32px;color:var(--muted);font-size:10px;display:flex;justify-content:space-between;align-items:center}
-  /* 📱 AJUSTES PARA CELULARES */
-@media (max-width: 768px) {
-    /* 1. Cambiamos el header para que no intente meter todo en una fila */
-    header {
-        display: block !important;
-        padding: 15px 15px 10px 15px !important;
-    }
-    
-    /* 2. El logo ocupa su propia línea arriba de todo, centrado */
-    .logo {
-        margin-bottom: 15px !important;
-        justify-content: center !important; 
-    }
-
-    /* 3. Volvemos "invisibles" a las cajas contenedoras para poder juntar los botones */
-    .header-center, .header-right {
-        display: inline !important; 
-    }
-
-    /* 4. Ocultamos los botones de Live, Backtest y el texto de "Actualizado" */
-    #tab-live, 
-    #tab-backtest,
-    #header-status {
-        display: none !important;
-    }
-
-    /* 5. Obligamos al selector y al tema a ponerse en la misma línea (48% y 48%) */
-    #bot-selector, 
-    button[onclick*="toggleTheme"] {
-        display: inline-block !important;
-        width: 48% !important; 
-        margin: 0 1% !important; 
-        padding: 12px 0 !important; 
-        font-size: 0.8rem !important;
-        text-align: center !important;
-        vertical-align: top !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        box-sizing: border-box !important;
-    }
-}
 </style>
 </head>
-
 <body>
 
 <header>
   <div class="logo">
     <div class="logo-icon">⚡</div>
     <div>
-      <div class="logo-text">VWAP <span>V3</span></div>
+      <div class="logo-text">VWAB <span>V3</span></div>
       <div style="color:var(--muted);font-size:10px;margin-top:2px">Retest + OB · Binance Futures</div>
     </div>
   </div>
   <div class="header-center">
-    <button class="nav-btn" id="tab-live" onclick="switchMode('live')">🟢 Bot en Vivo</button>
-    <button class="nav-btn" id="tab-backtest" onclick="switchMode('backtest')">📂 Ver Backtests</button>
-    <select id="bot-selector" class="nav-btn" onchange="cambiarBotSeleccionado(this.value)" style="cursor: pointer; appearance: auto;">
-        <option value="ETH">💎 Bot ETH</option>
-        <option value="BTC">🪙 Bot BTC</option>
+    <button class="mode-tab active" id="tab-live" onclick="switchMode('live')">● Live</button>
+    <button class="mode-tab" id="tab-backtest" onclick="switchMode('backtest')">⬡ Backtest</button>
+    <select id="bot-selector" class="mode-tab class="nav-btn" onchange="cambiarBotSeleccionado(this.value)" style="cursor: pointer; appearance: auto;">
+      <option value="ETH">💎 Bot ETH</option>
+      <option value="BTC">🪙 Bot BTC</option>
     </select>
   </div>
   <div class="header-right">
     <span id="header-status" style="font-size:10px;color:var(--muted)"></span>
-    <button class="nav-btn" style="width: auto; height: auto; overflow: visible; text-indent: 0;" onclick="toggleTheme()">🌓 Cambiar Tema</button>
+    <button class="mode-tab" id="theme-btn" onclick="toggleTheme()" title="Tema">Cambiar Tema 🌓</button>
   </div>
 </header>
 <div class="refresh-bar"><div class="refresh-fill" id="refreshFill"></div></div>
@@ -351,7 +278,7 @@
 </div>
 
 </main>
-<footer><span>VWAP Bot v3 · Dashboard v4.0</span><span id="footer-info"></span></footer>
+<footer><span>Scalping Bot v3 · Dashboard v4.0</span><span id="footer-info"></span></footer>
 
 <script>
 // ══════════════════════════════════════════════════════════
@@ -364,18 +291,6 @@ let _liveTradesFiltered = null; // null = sin filtro
 let _refreshTimer = null;
 let _refreshInterval = 30;
 let _isOnServer = false;
-
-// Variable global que guarda qué bot estamos mirando
-let botActivo = 'ETH'; 
-
-// Función que se ejecuta cuando cambiás el desplegable
-function cambiarBotSeleccionado(nuevoBot) {
-    botActivo = nuevoBot;
-    console.log("Cambiando vista a:", botActivo);
-    
-    // Forzamos a que vuelva a cargar los datos del nuevo bot al instante
-    fetchLiveData(); 
-}
 
 // Backtest
 let _allVariants = [], _activeIdx = 0, _origTrades = [];
@@ -512,6 +427,17 @@ function animateRefreshBar() {
 // ══════════════════════════════════════════════════════════
 //  LIVE: FETCH
 // ══════════════════════════════════════════════════════════
+// 1. Variable global (afuera de la función) para saber qué bot estamos mirando
+let botActivo = 'ETH'; 
+
+// 2. Función que se ejecuta cuando tocás el desplegable
+function cambiarBotSeleccionado(nuevoBot) {
+    botActivo = nuevoBot;
+    console.log("Cambiando vista a:", botActivo);
+    fetchLiveData(); // Forzamos a que recargue los datos del nuevo bot al instante
+}
+
+// 3. Tu función original (ahora usa la variable global en vez de la fija)
 async function fetchLiveData() {
   try {
     const [trRes, posRes, stRes] = await Promise.allSettled([
@@ -541,6 +467,7 @@ async function fetchLiveData() {
     console.error('Fetch error:', e);
   }
 }
+
 // ══════════════════════════════════════════════════════════
 //  LIVE: STATUS + POSITIONS
 // ══════════════════════════════════════════════════════════
@@ -708,52 +635,24 @@ function filtrarLive(f, btn) {
 // ══════════════════════════════════════════════════════════
 async function cargarServerFiles() {
   try {
-    // Agregamos "results/" a la ruta
-    const res = await fetch('/backtest/results/');
-    
-    if (!res.ok) {
-        throw new Error('No se pudo acceder a la carpeta /backtest/results/');
-    }
-
-    const archivos = await res.json();
-    
-    const jsonFiles = archivos
-        .filter(f => f.type === 'file' && f.name.endsWith('.json'))
-        .map(f => f.name);
-    
+    const res = await fetch('data/'); if (!res.ok) return;
+    const files = await res.json();
+    const jsonFiles = files.filter(f => f.name && f.name.endsWith('.json')).map(f => f.name);
+    if (!jsonFiles.length) return;
     document.getElementById('serverFiles').style.display = '';
-    
-    if (jsonFiles.length === 0) {
-        document.getElementById('fileList').innerHTML = '<p style="color:var(--muted)">No hay archivos JSON de backtest.</p>';
-        return;
-    }
-
-    document.getElementById('fileList').innerHTML = jsonFiles.map(f => 
-      `<button class="file-btn" onclick="cargarServerFile('${f}',this)">${f}</button>`
-    ).join('');
-    
-  } catch (e) {
-    console.error('Error:', e);
-    alert('Error al listar. Asegurate de tener archivos en backtest/results/.');
-  }
+    document.getElementById('fileList').innerHTML = jsonFiles.map(f =>
+      `<button class="file-btn" onclick="cargarServerFile('${f}',this)">${f}</button>`).join('');
+  } catch {}
 }
-
 async function cargarServerFile(name, btn) {
   try {
     document.querySelectorAll('.file-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    
-    // Acá también agregamos "results/"
-    const res = await fetch('/backtest/results/' + name);
-    if (!res.ok) throw new Error('No se pudo descargar el archivo');
-    
-    const data = await res.json();
-    procesarJSON(data, name); 
-    
-  } catch (e) {
-    alert('Error al abrir el archivo: ' + e.message);
-  }
+    const data = await (await fetch('data/' + name)).json();
+    procesarJSON(data, name);
+  } catch (e) { alert('Error: ' + e.message); }
 }
+
 // ══════════════════════════════════════════════════════════
 //  BACKTEST: UPLOAD / PROCESS
 // ══════════════════════════════════════════════════════════
@@ -939,13 +838,11 @@ function cargarDemo() {
 // ══════════════════════════════════════════════════════════
 //  THEME
 // ══════════════════════════════════════════════════════════
-function toggleTheme(){const c=document.documentElement.getAttribute('data-theme')||'dark';const n=c==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('scalp-theme',n);document.getElementById('theme-btn').textContent=n==='dark'?'🌓':'☀️';TC=gTC();if(_liveData)renderLive(_liveData);if(_allVariants.length)seleccionarVariante(_activeIdx)}
-(function(){const s=localStorage.getItem('scalp-theme');if(s){document.documentElement.setAttribute('data-theme',s);const b=document.getElementById('theme-btn');if(b)b.textContent=s==='dark'?'🌓':'☀️'}})();
+function toggleTheme(){const c=document.documentElement.getAttribute('data-theme')||'dark';const n=c==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('scalp-theme',n);document.getElementById('theme-btn').textContent=n==='dark'?'🌓 Tema Claro':'☀️ Tema Oscuro';TC=gTC();if(_liveData)renderLive(_liveData);if(_allVariants.length)seleccionarVariante(_activeIdx)}
+(function(){const s=localStorage.getItem('scalp-theme');if(s){document.documentElement.setAttribute('data-theme',s);const b=document.getElementById('theme-btn');if(b)b.textContent=s==='dark'?'🌓 Tema Claro' : '☀️ Tema Oscuro'}})();
 
 // ── INIT ──
 detectarServidor();
 </script>
-
-
 </body>
 </html>
