@@ -28,6 +28,7 @@ services:
       - BOT_ID=ETH
       - PYTHONPATH=/app
     volumes:
+      - .:/app
       - ./dashboard/data:/app/logs
     logging:
       driver: json-file
@@ -47,6 +48,7 @@ services:
       - BOT_ID=BTC
       - PYTHONPATH=/app
     volumes:
+      - .:/app
       - ./dashboard/data:/app/logs
     logging:
       driver: json-file
