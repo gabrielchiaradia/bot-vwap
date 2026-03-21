@@ -70,5 +70,6 @@ services:
       - ./dashboard/nginx.conf:/etc/nginx/conf.d/default.conf
       # La carpeta con los JSON de los dos bots
       - ./dashboard/data:/usr/share/nginx/html/data:ro
+        ./backtest:/usr/share/nginx/html/backtest:ro
     
       
