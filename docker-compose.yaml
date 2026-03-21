@@ -22,6 +22,7 @@ services:
     container_name: vwap-eth
     restart: unless-stopped
     env_file: .env.eth
+    user: "1000:1000"
     environment:
       - TZ=America/Argentina/Buenos_Aires
       - BOT_ID=ETH
@@ -40,6 +41,7 @@ services:
     container_name: vwap-btc
     restart: unless-stopped
     env_file: .env.btc
+    user: "1000:1000"
     environment:
       - TZ=America/Argentina/Buenos_Aires
       - BOT_ID=BTC
@@ -60,6 +62,11 @@ services:
     ports:
       - "8081:80"
     volumes:
-      - ./dashboard/index.html:/usr/share/nginx/html/index.html:ro
-      - ./dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./dashboard/data:/usr/share/nginx/html/logs:ro
+      # El HTML principal
+      - ./dashboard/index.html:/usr/share/nginx/html/index.html
+      # La configuración de Nginx (VITAL para evitar el 403)
+      - ./dashboard/nginx.conf:/etc/nginx/conf.d/default.conf
+      # La carpeta con los JSON de los dos bots
+      - ./dashboard/data:/usr/share/nginx/html/data
+    
+      
