@@ -39,7 +39,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         signal, entry_price, limit_price = get_vwap_signals(df_bands)
         logger.info("  [4] ")
         # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
-        exportar_status(balance, cycle_count, open_count)
+        #exportar_status(balance, cycle_count, open_count)
         logger.info("  [5] ")
         exportar_dashboard()
         logger.info("  [6] ")
