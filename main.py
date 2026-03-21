@@ -14,7 +14,7 @@ from src.strategy import calculate_vwap_bands, get_vwap_signals
 from src.risk import can_trade, calculate_quantity, check_drawdown_alert
 from src.journal import record_open, record_close, _load
 from src.live_writer import exportar_dashboard, exportar_status
-from src.notifier import alert_trade_open, alert_trade_close, alert_error
+from src.notifier import alert_trade_open, alert_trade_close, alert_error, alert_startup
 
 def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
     try:
@@ -80,7 +80,7 @@ def main():
     logger.info(f"  BOT {BOT_NAME} INICIADO")
     logger.info(f"  Símbolo: {SYMBOL} | Riesgo: {RISK_PER_TRADE}%")
     logger.info("="*50)
-
+    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO)
     client = get_client()
     set_leverage(client, SYMBOL)
 
@@ -90,9 +90,7 @@ def main():
         logger.info(f"  BOT {BOT_NAME}  R/R: {TP_RR_RATIO} Riesgo: {RISK_PER_TRADE}%")
         logger.info(F"  Bot corriendo daunte {cycle_count} minutos")
         logger.info("="*50)
-        logger.info("Iniciando ciclo...")
         run_cycle(client, cycle_count)
-        logger.info("Ciclo finalizado, esperando 60s...")
         cycle_count += 1      
         time.sleep(60)  # Esperamos al cierre del minuto para recalcular bandas
 
