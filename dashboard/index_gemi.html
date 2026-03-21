@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <title>VWAP Multi-Bot Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg: #0d1117; --surface: #161b22; --text: #c9d1d9; --border: #30363d;
+            --accent: #58a6ff; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+        }
+        [data-theme="light"] {
+            --bg: #f6f8fa; --surface: #ffffff; --text: #24292f; --border: #d0d7de;
+            --accent: #0969da; --green: #1a7f37; --red: #cf222e; --yellow: #9a6700;
+        }
+
+        body { background: var(--bg); color: var(--text); font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px; transition: background 0.3s; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; padding: 15px 25px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: var(--surface); padding: 18px; border-radius: 12px; border: 1px solid var(--border); border-left: 4px solid var(--accent); }
+        .stat-value { font-size: 22px; font-weight: bold; display: block; margin-top: 5px; }
+        .stat-label { font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .chart-box { background: var(--surface); padding: 20px; border-radius: 12px; border: 1px solid var(--border); height: 350px; margin-bottom: 20px; }
+        
+        .btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 8px 16px; cursor: pointer; border-radius: 6px; font-family: inherit; font-size: 12px; transition: 0.2s; }
+        .btn:hover { border-color: var(--accent); background: var(--bg); }
+        .btn-active { border-color: var(--accent); color: var(--accent); font-weight: bold; }
+
+        /* Grid.js Custom para que herede el tema */
+        .gridjs-wrapper { background: var(--surface) !important; border-radius: 8px !important; border: 1px solid var(--border) !important; }
+        .gridjs-th { background: var(--bg) !important; color: var(--text) !important; border: 1px solid var(--border) !important; font-size: 11px !important; }
+        .gridjs-td { background: var(--surface) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+        .gridjs-search-input { background: var(--bg) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h1 style="margin:0; font-size: 18px;">VWAP ANALYTICS <span id="mode-label" style="color:var(--accent)">LIVE</span></h1>
+            <div id="connection-status" style="font-size: 10px; opacity: 0.7;">● BINANCE FEED</div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <select id="botSelect" onchange="loadLiveData()" class="btn">
+                <option value="ALL">Total Account</option>
+                <option value="ETH">ETH Bot</option>
+                <option value="BTC">BTC Bot</option>
+            </select>
+            <button onclick="toggleTheme()" class="btn">🌓 Cambiar Tema</button>
+        </div>
+    </div>
+
+    <div class="stats-grid" id="stats-container">
+        </div>
+
+    <div class="chart-box"><canvas id="mainChart"></canvas></div>
+
+    <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center;">
+        <button class="btn btn-active" id="btn-live-view" onclick="showLive()">📡 Ver Operativa Real</button>
+        <span style="color:var(--border)">|</span>
+        <button class="btn" onclick="document.getElementById('backtestInput').click()">📂 Cargar Reporte JSON</button>
+        <input type="file" id="backtestInput" style="display:none" onchange="handleBacktest(this.files[0])">
+        <small id="filename-display" style="font-size: 10px; color: var(--accent)"></small>
+    </div>
+
+    <div id="grid-container"></div>
+
+    <script>
+        let chart = null;
+        let grid = null;
+        let prices = { BTCUSDT: 0, ETHUSDT: 0 };
+        let currentMode = 'LIVE';
+
+        // 1. WEBSOCKET PARA PNL FLOTANTE
+        const ws = new WebSocket('wss://fstream.binance.com/ws/!ticker@arr');
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            data.forEach(t => { if(t.s === 'BTCUSDT' || t.s === 'ETHUSDT') prices[t.s] = parseFloat(t.c); });
+            if(currentMode === 'LIVE') updateFloatingPnL();
+        };
+
+        async function updateFloatingPnL() {
+            const botId = document.getElementById('botSelect').value;
+            const bots = botId === 'ALL' ? ['ETH', 'BTC'] : [botId];
+            let unrealized = 0;
+            for(const id of bots) {
+                try {
+                    const pos = await fetch(`/api/logs/open_positions_scalp_${id}.json?t=${Date.now()}`).then(r => r.json());
+                    if(pos && pos.entry_price > 0 && prices[pos.symbol] > 0) {
+                        const diff = pos.direction === 'LONG' ? (prices[pos.symbol] - pos.entry_price) : (pos.entry_price - prices[pos.symbol]);
+                        unrealized += (diff * pos.quantity);
+                    }
+                } catch(e) {}
+            }
+            const el = document.getElementById('val-floating');
+            if(el) {
+                el.innerText = `$${unrealized.toFixed(2)}`;
+                el.style.color = unrealized >= 0 ? "var(--green)" : "var(--red)";
+            }
+        }
+
+        // 2. CARGAR DATA LIVE
+        async function loadLiveData() {
+            currentMode = 'LIVE';
+            document.getElementById('mode-label').innerText = 'LIVE';
+            document.getElementById('mode-label').style.color = 'var(--accent)';
+            document.getElementById('btn-live-view').classList.add('btn-active');
+            
+            const botId = document.getElementById('botSelect').value;
+            const bots = botId === 'ALL' ? ['ETH', 'BTC'] : [botId];
+            
+            let trades = [];
+            let totalBalance = 0;
+
+            for(const id of bots) {
+                try {
+                    const t = await fetch(`/api/logs/dashboard_trades_${id}.json?v=${Date.now()}`).then(r => r.json());
+                    const s = await fetch(`/api/logs/bot_status_${id}.json?v=${Date.now()}`).then(r => r.json());
+                    trades = trades.concat(t);
+                    totalBalance += s.balance;
+                } catch(e){}
+            }
+            trades.sort((a,b) => new Date(b.close_time) - new Date(a.close_time));
+            renderDashboard(trades, { balance: totalBalance, isBacktest: false });
+        }
+
+        // 3. CARGAR BACKTEST (Compatible con VWAP JSON)
+        function handleBacktest(file) {
+            if(!file) return;
+            const reader = new FileReader();
+            document.getElementById('filename-display').innerText = file.name;
+            
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    const summary = data.summaries[0];
+                    
+                    // Normalizamos los trades del backtest
+                    const tradesNorm = summary.trades.map(t => ({
+                        close_time: t.close_time || t.time,
+                        symbol: t.symbol || "ETHUSDT",
+                        direction: t.direction,
+                        entry_price: t.entry || t.entry_price,
+                        exit_price: t.exit || t.exit_price,
+                        pnl_usdt: t.pnl || t.pnl_bruto,
+                        result: t.result,
+                        bot_id: "BACKTEST"
+                    }));
+
+                    currentMode = 'BACKTEST';
+                    document.getElementById('mode-label').innerText = 'BACKTEST';
+                    document.getElementById('mode-label').style.color = 'var(--yellow)';
+                    document.getElementById('btn-live-view').classList.remove('btn-active');
+
+                    renderDashboard(tradesNorm, { 
+                        balance: summary.capital_final, 
+                        isBacktest: true,
+                        extra: summary 
+                    });
+                } catch(err) {
+                    alert("Error en formato JSON: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // 4. RENDERIZADO
+        function renderDashboard(trades, config) {
+            const wins = trades.filter(t => t.result === 'WIN').length;
+            const wr = trades.length > 0 ? (wins/trades.length*100).toFixed(1) : 0;
+            const pnlTotal = trades.reduce((acc, t) => acc + t.pnl_usdt, 0);
+
+            // Generar Cards de Stats
+            let statsHtml = `
+                <div class="stat-card"><span class="stat-label">Capital Final</span><span class="stat-value">$${config.balance.toFixed(2)}</span></div>
+                <div class="stat-card"><span class="stat-label">PnL Acumulado</span><span class="stat-value" style="color:${pnlTotal >= 0 ? 'var(--green)' : 'var(--red)'}">$${pnlTotal.toFixed(2)}</span></div>
+                <div class="stat-card"><span class="stat-label">Win Rate</span><span class="stat-value">${wr}%</span></div>
+            `;
+            
+            if(config.isBacktest) {
+                statsHtml += `<div class="stat-card" style="border-left-color:var(--yellow)"><span class="stat-label">Max Drawdown</span><span class="stat-value" style="color:var(--red)">${config.extra.max_drawdown}%</span></div>`;
+                statsHtml += `<div class="stat-card" style="border-left-color:var(--yellow)"><span class="stat-label">Profit Factor</span><span class="stat-value">${config.extra.profit_factor || 'N/A'}</span></div>`;
+            } else {
+                statsHtml += `<div class="stat-card"><span class="stat-label">PnL Flotante</span><span class="stat-value" id="val-floating">$0.00</span></div>`;
+            }
+            document.getElementById('stats-container').innerHTML = statsHtml;
+
+            // Chart
+            const chartData = [...trades].reverse();
+            let sum = 0;
+            const points = chartData.map(t => { sum += t.pnl_usdt; return sum; });
+            renderChart(points);
+
+            // Grid
+            renderGrid(trades);
+        }
+
+        function renderGrid(trades) {
+            const container = document.getElementById('grid-container');
+            container.innerHTML = "";
+            grid = new gridjs.Grid({
+                columns: ["FECHA", "BOT", "DIR", "ENTRADA", "SALIDA", "PNL", "RESULT"],
+                data: trades.map(t => [
+                    t.close_time.split('T')[0], t.bot_id, t.direction, t.entry_price.toFixed(2), t.exit_price.toFixed(2), 
+                    { content: `$${t.pnl_usdt.toFixed(2)}`, style: {color: t.pnl_usdt >= 0 ? 'var(--green)' : 'var(--red)'} },
+                    t.result
+                ]),
+                sort: true, search: true, pagination: { limit: 10 }
+            }).render(container);
+        }
+
+        function renderChart(points) {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            if(chart) chart.destroy();
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: points.map((_,i) => i+1),
+                    datasets: [{
+                        data: points, borderColor: '#58a6ff', tension: 0.2, fill: true,
+                        backgroundColor: 'rgba(88, 166, 255, 0.05)', borderWidth: 2, pointRadius: 0
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: isDark ? '#8b949e' : '#57606a', font: { size: 10 } } },
+                        y: { grid: { color: isDark ? '#30363d' : '#d0d7de' }, ticks: { color: isDark ? '#8b949e' : '#57606a', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function toggleTheme() {
+            const html = document.documentElement;
+            const theme = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            // Re-renderizar para aplicar colores de Chart.js y Grid.js
+            if(currentMode === 'LIVE') loadLiveData();
+        }
+
+        function showLive() { 
+            document.getElementById('filename-display').innerText = "";
+            loadLiveData(); 
+        }
+
+        // Inicialización
+        document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');
+        loadLiveData();
+    </script>
+</body>
+</html>
