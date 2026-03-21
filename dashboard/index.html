@@ -152,50 +152,10 @@
 
   @media(max-width:900px){.chart-grid{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}main{padding:16px}header{padding:16px}.pos-row{grid-template-columns:1fr 1fr;font-size:10px}}
   footer{border-top:1px solid var(--border);padding:16px 32px;color:var(--muted);font-size:10px;display:flex;justify-content:space-between;align-items:center}
- /* 📱 AJUSTES PARA CELULARES */
-@media (max-width: 768px) {
-    /* 1. Cambiamos el header para que no intente meter todo en una fila */
-    header {
-        display: block !important;
-        padding: 15px 15px 10px 15px !important;
-    }
-    
-    /* 2. El logo ocupa su propia línea arriba de todo, centrado */
-    .logo {
-        margin-bottom: 15px !important;
-        justify-content: center !important; 
-    }
-
-    /* 3. Volvemos "invisibles" a las cajas contenedoras para poder juntar los botones */
-    .header-center, .header-right {
-        display: inline !important; 
-    }
-
-    /* 4. Ocultamos los botones de Live, Backtest y el texto de "Actualizado" */
-    #tab-live, 
-    #tab-backtest,
-    #header-status {
-        display: none !important;
-    }
-
-    /* 5. Obligamos al selector y al tema a ponerse en la misma línea (48% y 48%) */
-    #bot-selector, 
-    button[onclick*="toggleTheme"] {
-        display: inline-block !important;
-        width: 48% !important; 
-        margin: 0 1% !important; 
-        padding: 12px 0 !important; 
-        font-size: 0.8rem !important;
-        text-align: center !important;
-        vertical-align: top !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        box-sizing: border-box !important;
-    }
-}
+ 
 </style>
 </head>
+
 <body>
 
 <header>
@@ -944,5 +904,52 @@ function toggleTheme(){const c=document.documentElement.getAttribute('data-theme
 // ── INIT ──
 detectarServidor();
 </script>
+<style>
+/* 📱 OPCIÓN NUCLEAR PARA CELULARES */
+@media screen and (max-width: 768px) {
+    /* 1. Ocultamos la basura sí o sí por el texto de la acción */
+    button[onclick*="showLive"], 
+    button[onclick*="showBacktest"],
+    button[onclick*="cargarServer"],
+    #header-status,
+    .live-dot,
+    #liveLabel {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    /* 2. Forzamos al header a usar Flexbox y envolver los elementos */
+    header {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: space-between !important;
+        padding: 10px !important;
+    }
+
+    /* 3. Título y subtítulo ocupan todo el ancho arriba */
+    header h1, header p {
+        width: 100% !important;
+        text-align: center !important;
+    }
+
+    /* 4. Selector y Tema ocupan 48% y se van al fondo (order: 99) */
+    #bot-selector, 
+    button[onclick*="toggleTheme"] {
+        display: block !important;
+        width: 48% !important;
+        order: 99 !important; 
+        margin-top: 15px !important;
+        padding: 12px 5px !important;
+        font-size: 0.85rem !important;
+        text-align: center !important;
+        border-radius: 8px !important;
+        box-sizing: border-box !important;
+    }
+}
+</style>
 </body>
 </html>
