@@ -88,6 +88,7 @@ def main():
     client = get_client()
     set_leverage(client, SYMBOL)
 
+    cycle_count = 0
     while True:
         run_cycle(client, cycle_count)
         cycle_count += 1      
