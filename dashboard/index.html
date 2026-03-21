@@ -620,33 +620,55 @@ function filtrarLive(f, btn) {
 // ══════════════════════════════════════════════════════════
 async function cargarServerFiles() {
   try {
-    // Eliminamos el fetch('data/') que es lo que te tira el error 403.
-    // Ponemos los archivos de los bots manualmente:
-    const jsonFiles = [
-      'dashboard_trades_ETH.json', 
-      'dashboard_trades_BTC.json'
-    ];
+    // Pedimos a Nginx que nos liste el contenido de la carpeta backtest
+    const res = await fetch('/backtest/');
+    
+    if (!res.ok) {
+        throw new Error('No se pudo acceder a la carpeta /backtest/');
+    }
+
+    // Nginx devuelve un array de objetos con los archivos
+    const archivos = await res.json();
+    
+    // Filtramos para que solo muestre archivos que terminen en .json
+    const jsonFiles = archivos
+        .filter(f => f.type === 'file' && f.name.endsWith('.json'))
+        .map(f => f.name);
     
     document.getElementById('serverFiles').style.display = '';
+    
+    if (jsonFiles.length === 0) {
+        document.getElementById('fileList').innerHTML = '<p style="color:var(--muted)">No hay archivos JSON en la carpeta de backtest.</p>';
+        return;
+    }
+
+    // Creamos los botones con los nombres reales de tus backtests
     document.getElementById('fileList').innerHTML = jsonFiles.map(f => 
       `<button class="file-btn" onclick="cargarServerFile('${f}',this)">${f}</button>`
     ).join('');
+    
   } catch (e) {
     console.error('Error:', e);
+    alert('Error al listar backtests. Revisá que la carpeta /backtest/ tenga permisos y archivos.');
   }
 }
+
 async function cargarServerFile(name, btn) {
   try {
     document.querySelectorAll('.file-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    // Busca directamente el archivo en lugar de listar la carpeta
-    const data = await (await fetch('/data/' + name)).json();
-    procesarJSON(data, name);
+    
+    // Vamos a buscar el archivo específico dentro de la ruta /backtest/
+    const res = await fetch('/backtest/' + name);
+    if (!res.ok) throw new Error('No se pudo descargar el archivo');
+    
+    const data = await res.json();
+    procesarJSON(data, name); // Esta es tu función original que arma los gráficos
+    
   } catch (e) {
-    alert('Todavía no se creó el archivo: ' + e.message);
+    alert('Error al abrir el archivo de backtest: ' + e.message);
   }
 }
-
 // ══════════════════════════════════════════════════════════
 //  BACKTEST: UPLOAD / PROCESS
 // ══════════════════════════════════════════════════════════
