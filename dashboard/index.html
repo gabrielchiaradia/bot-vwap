@@ -201,6 +201,18 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
           font-size: 1.2rem !important;
           margin-bottom: 5px;
       }
+      .logo-icon {
+        cursor: pointer;
+        padding: 5px;
+        transition: transform 0.2s active;
+        display: inline-block;
+    }
+
+    /* Efecto visual cuando lo tocás con el dedo */
+      .logo-icon:active {
+        transform: scale(1.2) rotate(10deg);
+        color: var(--accent);
+    }
   }
 
 
@@ -211,7 +223,7 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
 
 <header>
   <div class="logo">
-    <div class="logo-icon">⚡</div>
+    <div class="logo-icon" onclick="handleLogoClick()">⚡</div>
     <div>
       <div class="logo-text">VWAB <span>V3</span></div>
       <div style="color:var(--muted);font-size:10px;margin-top:2px">Retest + OB · Binance Futures</div>
@@ -489,6 +501,38 @@ function switchMode(mode) {
   document.getElementById('tab-backtest').classList.toggle('active', mode === 'backtest');
   if (mode === 'live' && _isOnServer) iniciarAutoRefresh();
   else pararAutoRefresh();
+}
+
+function handleLogoClick() {
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile) return; // Si no es celular, no hace nada
+
+    // Buscamos cuál de los dos botones tiene la clase 'active' actualmente
+    const btnBacktest = document.getElementById('tab-backtest');
+    const btnLive = document.getElementById('tab-live');
+    
+    // Si el de backtest tiene la clase 'active', el modo actual es backtest
+    const currentModeCalculated = btnBacktest.classList.contains('active') ? 'backtest' : 'live';
+    
+    // Definimos el nuevo modo (el opuesto al actual)
+    const newMode = (currentModeCalculated === 'live') ? 'backtest' : 'live';
+
+    // Ejecutamos tu función de cambio
+    if (typeof switchMode === 'function') {
+        switchMode(newMode);
+        
+        // Feedback visual en el rayo para confirmar el toque
+        const icon = document.querySelector('.logo-icon');
+        icon.style.filter = "drop-shadow(0 0 10px var(--accent))";
+        icon.style.transform = "scale(1.3)";
+        
+        setTimeout(() => {
+            icon.style.filter = "none";
+            icon.style.transform = "scale(1)";
+        }, 200);
+        
+        console.log("Cambiando a modo: " + newMode);
+    }
 }
 
 // ══════════════════════════════════════════════════════════
