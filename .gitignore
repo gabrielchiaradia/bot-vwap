@@ -14,6 +14,7 @@ dashboard/data/*.json
 # ── Resultados de backtest ────────────────────
 backtest/results/*.json
 backtest/results/*.csv
+backtest/data/*.csv
 # (mantener solo el directorio vacío con .gitkeep)
 
 # SO
