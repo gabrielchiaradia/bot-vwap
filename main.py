@@ -92,6 +92,7 @@ def main():
     while True:
         logger.info("="*50)
         logger.info(f"  BOT {BOT_NAME}  R/R: {TP_RR_RATIO} Riesgo: {RISK_PER_TRADE}%")
+        logger.info(F"  Bot corriendo daunte {cycle_count} minutos")
         logger.info("="*50)
         run_cycle(client, cycle_count)
         cycle_count += 1      
