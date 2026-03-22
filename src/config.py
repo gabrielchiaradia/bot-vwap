@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-print(f"DEBUG: La API Key es: {os.getenv('BINANCE_API_KEY')}")
 # Identificación (Viene del environment del docker-compose)
 BOT_ID = os.getenv("BOT_ID", "DEV")  # ETH o BTC
 BOT_NAME = os.getenv("BOT_NAME", f"VWAP_{BOT_ID}")
