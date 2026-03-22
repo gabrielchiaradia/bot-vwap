@@ -28,15 +28,28 @@ def set_leverage(client, symbol):
 def get_account_status(client):
     try:
         acc = client.futures_account()
+        
+        # .get('llave', valor_por_defecto) evita que el bot se detenga si la llave falta
+        wallet = float(acc.get('totalWalletBalance', 0.0))
+        pnl = float(acc.get('totalUnrealizedProfit', 0.0))
+        margin = float(acc.get('totalMarginBalance', 0.0))
+        available = float(acc.get('availableBalance', 0.0))
+        
         return {
-            "wallet_balance": float(acc['totalWalletBalance']),
-            "unrealized_pnl": float(acc['totalUnrealizedProfit']),
-            "margin_balance": float(acc['totalMarginBalance']),
-            "available": float(acc['availableBalance']),
+            "wallet_balance": wallet,
+            "unrealized_pnl": pnl,
+            "margin_balance": margin,
+            "available": available
         }
     except Exception as e:
-        logger.error(f"Error en status de cuenta: {e}")
-        return None
+        logger.error(f"Error crítico obteniendo cuenta: {e}")
+        # Retornamos ceros para que el resto del bot no explote
+        return {
+            "wallet_balance": 0.0,
+            "unrealized_pnl": 0.0,
+            "margin_balance": 0.0,
+            "available": 0.0
+        }
     
 def cancel_all_open_orders(client, symbol):
     """Cancela todas las órdenes LIMIT abiertas para un símbolo"""
