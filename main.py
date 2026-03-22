@@ -80,9 +80,9 @@ def main():
     logger.info(f"  Símbolo: {SYMBOL} | Riesgo: {RISK_PER_TRADE}%")
     logger.info("="*50)
     client = get_client()
-    balanceinicial = get_futures_balance(client)
-    balanceinicial2 = round(balanceinicial, 2)
-    print(balanceinicial2)
+    balance = get_futures_balance(client)
+    balanceinicial = round(balance, 0)
+    print(balanceinicial)
     alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO )
     set_leverage(client, SYMBOL)
 
