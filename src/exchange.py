@@ -32,6 +32,14 @@ def get_futures_balance(client):
     except Exception as e:
         logger.error(f"Error obteniendo balance: {e}")
         return 0.0
+    
+def get_total_balance(client):
+    try:
+        acc = client.futures_account()
+        return float(acc['Balance'])
+    except Exception as e:
+        logger.error(f"Error obteniendo balance: {e}")
+        return 0.0
 
 def cancel_all_open_orders(client, symbol):
     """Cancela todas las órdenes LIMIT abiertas para un símbolo"""
@@ -91,7 +99,8 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
             type=FUTURE_ORDER_TYPE_LIMIT,
             timeInForce=TIME_IN_FORCE_GTC,
             price=tp_price,
-            quantity=qty
+            quantity=qty,
+            reduceOnly=True
         )
         logger.info(f"[{BOT_ID}] Protección colocada: SL {sl_price} | TP {tp_price}")
     except Exception as e:

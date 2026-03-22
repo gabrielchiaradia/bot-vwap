@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  :root,[data-theme="dark"]{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--accent:#00d2ff;--accent2:#0ea5e9;--green:#3fb950;--red:#f85149;--yellow:#ffd600;--text:#8b949e;--text-strong:#c9d1d9;--muted:#4a5568;--glow:0 0 20px rgba(56, 189, 248, 0.15);--header-grad:linear-gradient(180deg,#0a1520 0%,var(--bg) 100%);--tooltip-bg:#0d1117;--tooltip-border:#1e2d3d;--tooltip-title:#38bdf8;--tooltip-body:#c9d1d9;--chart-grid:rgba(30,45,61,.7);--chart-green-bar:rgba(0,230,118,.7);--chart-red-bar:rgba(255,61,87,.7);--chart-yellow-bar:rgba(255,214,0,.5);--chart-accent-fill-0:rgba(56, 189, 248, 0.2);--chart-accent-fill-1:rgba(56, 189, 248, 0.01);--logo-glow-in:rgba(56, 189, 248, 0.1);--logo-glow-out:rgba(56, 189, 248, 0.2);--scanline:rgba(255,255,255,0.01));--row-active:rgba(56, 189, 248, 0.08)}
+  :root,[data-theme="dark"]{--bg:#0d1117;--surface:#161b22;--surface2:#21262d;--border:#30363d;--accent:#00d2ff;--accent2:#0ea5e9;--green:#3fb950;--red:#f85149;--yellow:#ffd600;--text:#8b949e;--text-strong:#c9d1d9;--muted:#4a5568;--glow:0 0 20px rgba(56, 189, 248, 0.15);--header-grad:linear-gradient(180deg,#0a1520 0%,var(--bg) 100%);--tooltip-bg:#0d1117;--tooltip-border:#1e2d3d;--tooltip-title:#38bdf8;--tooltip-body:#c9d1d9;--chart-grid:rgba(30,45,61,.7);--chart-green-bar:rgba(0,230,118,.7);--chart-red-bar:rgba(255,61,87,.7);--chart-yellow-bar:rgba(255,214,0,.5);--chart-accent-fill-0:rgba(56, 189, 248, 0.2);--chart-accent-fill-1:rgba(56, 189, 248, 0.01);--logo-glow-in:rgba(56, 189, 248, 0.1);--logo-glow-out:rgba(56, 189, 248, 0.2);--scanline:rgba(255,255,255,0.01);--row-active:rgba(56, 189, 248, 0.08)}
   [data-theme="light"]{--bg:#f5f5f7;--surface:#fff;--surface2:#eef0f4;--border:#d1d5db;--accent:#00d2ff;--accent2:#0ea5e9;--green:#16a34a;--red:#dc2626;--yellow:#ca8a04;--text:#1f2937;--text-strong:#000;--muted:#6b7280;--glow:0 0 20px rgba(56, 189, 248, 0.15);--header-grad:linear-gradient(180deg,#e8eaef 0%,var(--bg) 100%);--tooltip-bg:#fff;--tooltip-border:#d1d5db;--tooltip-title:#38bdf8;--tooltip-body:#1f2937;--chart-grid:rgba(0,0,0,.06);--chart-green-bar:rgba(22,163,74,.7);--chart-red-bar:rgba(220,38,38,.7);--chart-yellow-bar:rgba(202,138,4,.5);--chart-accent-fill-0:rgba(56, 189, 248, 0.2);--chart-accent-fill-1:rgba(56, 189, 248, 0.01);--logo-glow-in:rgba(56, 189, 248, 0.1);--logo-glow-out:rgba(56, 189, 248, 0.2);--scanline:rgba(0,0,0,.015);--row-active:rgba(56, 189, 248, 0.08)}
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;line-height:1.6;min-height:100vh}
@@ -250,8 +250,8 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
 <div id="mode-live">
   <div class="status-bar" id="statusBar">
     <div class="status-item"><span class="live-dot off" id="liveDot"></span><strong id="liveLabel">Conectando...</strong></div>
-    <div class="status-item">Balance: <strong id="liveBalance">—</strong></div>
-    <div class="status-item">Ciclo: <strong id="liveCycle">—</strong></div>
+    <div class="status-item">Margin: <strong id="liveBalance">—</strong></div>
+    <div class="status-item">Total Balance: <strong id="liveCycle">—</strong></div>
     <div class="status-item">Uptime: <strong id="liveUptime">—</strong></div>
     <div class="status-item">Auto-refresh: <strong>30s</strong></div>
   </div>
@@ -600,7 +600,7 @@ async function fetchLiveData() {
 // ══════════════════════════════════════════════════════════
 function renderStatus(st) {
   document.getElementById('liveBalance').textContent = '$' + (st.balance || 0).toLocaleString('en', {maximumFractionDigits:2});
-  document.getElementById('liveCycle').textContent = '#' + (st.cycle_count || 0);
+  document.getElementById('liveCycle').textContent = '#' + (st.total_balance || 0);
   if (st.uptime_since) {
     const diff = Date.now() - new Date(st.uptime_since).getTime();
     const hrs = Math.floor(diff / 3600000), mins = Math.floor((diff % 3600000) / 60000);
