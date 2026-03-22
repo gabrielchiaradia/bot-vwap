@@ -8,7 +8,7 @@ from src.logger import logger
 from src.exchange import (
     get_client, get_futures_balance, set_leverage, 
     cancel_all_open_orders, place_limit_order, 
-    place_sl_tp, get_open_position
+    place_sl_tp, get_open_position, get_total_balance
 )
 from src.strategy import calculate_vwap_bands, get_vwap_signals
 from src.risk import can_trade, calculate_position_size, check_drawdown_alert
@@ -85,7 +85,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
                     alert_trade_open(SYMBOL, signal, entry_price, sl_price, tp_price, RISK_PER_TRADE)
                     
                     # Forzar refresh del dashboard al abrir trade
-                    exportar_status(balance, cycle_count, 1)
+                    exportar_status(balance, total_balance=, 1)
                     exportar_dashboard()
                 else:
                     logger.warning(f"Orden rechazada o fallida. Estado: {order.get('status') if order else 'None'}")
