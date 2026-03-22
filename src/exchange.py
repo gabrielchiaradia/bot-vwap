@@ -64,6 +64,8 @@ def cancel_all_open_orders(client, symbol):
 def place_limit_order(client, symbol, side, price, quantity):
     """Coloca una orden LIMIT (Maker)"""
     try:
+        price = round(float(price), 2) 
+        quantity = round(float(quantity), 3)
         # Usamos Post Only para asegurar que siempre seamos MAKER (menos fees)
         order = client.futures_create_order(
             symbol=symbol,
@@ -76,14 +78,21 @@ def place_limit_order(client, symbol, side, price, quantity):
         logger.info(f"[{BOT_ID}] Orden LIMIT {side} colocada en {price}")
         return order
     except Exception as e:
-        if "Order would immediately trigger" in str(e):
-            # Si el precio ya cruzó la banda, entramos por Market para no perder la oportunidad
-            return client.futures_create_order(
-                symbol=symbol,
-                side=side,
-                type=FUTURE_ORDER_TYPE_MARKET,
-                quantity=quantity
-            )
+        # Buscamos el error -5022 (Post-Only rejected) o el mensaje clásico
+        error_str = str(e)
+        if "5022" in error_str or "immediately trigger" in error_str or "Post Only" in error_str:
+            logger.warning(f"[{symbol}] Precio cruzó la banda (Post-Only rechazado). Entrando por MARKET...")
+            try:
+                return client.futures_create_order(
+                    symbol=symbol,
+                    side=side,
+                    type=FUTURE_ORDER_TYPE_MARKET,
+                    quantity=quantity # Asegurate que la variable se llame qty o quantity según tu código
+                )
+            except Exception as market_e:
+                logger.error(f"Error en entrada Market de respaldo: {market_e}")
+                return None
+        
         logger.error(f"Error colocando LIMIT: {e}")
         return None
 
@@ -92,6 +101,8 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
     try:
         # El lado de cierre es el opuesto al de entrada
         close_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
+        sl_price = round(float(sl_price), 2)
+        tp_price = round(float(tp_price), 2)
         
         # Stop Loss (Market)
         client.futures_create_order(
