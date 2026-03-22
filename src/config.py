@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv(".env.eth")
+load_dotenv()
 
 print(f"DEBUG: La API Key es: {os.getenv('BINANCE_API_KEY')}")
 # Identificación (Viene del environment del docker-compose)
