@@ -21,7 +21,8 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         account = get_account_status(client)
         # Datos de la cuenta
         balance = account['wallet_balance'] # Balance total
-        pnl = account['totalUnrealizedProfit']
+        pnl_str = accout.get('totalUnrealizedProfit', "0")
+        pnl = float(pnl_str) if pnl_str else 0.0
         margin = account['totalMarginBalance']
         available = account['availableBalance']
 
