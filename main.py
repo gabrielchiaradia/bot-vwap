@@ -38,7 +38,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         
         # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
         total_balance = get_total_balance(client)
-        ptinr(total_balance)
+        print(total_balance)
 
         exportar_status(balance, total_balance, open_count)
         exportar_dashboard()
@@ -85,7 +85,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
                     alert_trade_open(SYMBOL, signal, entry_price, sl_price, tp_price, RISK_PER_TRADE)
                     
                     # Forzar refresh del dashboard al abrir trade
-                    exportar_status(balance, total_balance=, 1)
+                    exportar_status(balance, total_balance, 1)
                     exportar_dashboard()
                 else:
                     logger.warning(f"Orden rechazada o fallida. Estado: {order.get('status') if order else 'None'}")
