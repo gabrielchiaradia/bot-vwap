@@ -37,8 +37,8 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         signal, entry_price, tp_price = get_vwap_signals(df_bands)
         
         # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
-        ###    #exportar_status(balance, cycle_count, open_count)
-        ###    #exportar_dashboard()
+        exportar_status(balance, cycle_count, open_count)
+        exportar_dashboard()
         
         # -- 3. EJECUCIÓN: Si hay señal y no hay posición ---
         if signal and open_count == 0:
@@ -96,7 +96,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
 def main():
     logger.info("="*50)
     logger.info(f"  BOT {BOT_NAME} INICIADO")
-    logger.info(f"  Símbolo: {SYMBOL} | Riesgo por trade: {RISK_PER_TRADE}%")
+    logger.info(f"  Símbolo: {SYMBOL}")
     client = get_client()
     balance = get_futures_balance(client)
     balanceinicial = int(balance)
