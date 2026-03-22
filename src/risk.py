@@ -30,40 +30,34 @@ def can_trade(trades_today):
         return False
     return True
 
-def calculate_quantity(client, price):
+def calculate_quantity(calculate_position_size(balance, risk_pct, entry_price, sl_price):
     """
-    Calcula la cantidad (Qty) basada en el riesgo dinámico del .env
-    Riesgo = (Balance * RISK_PER_TRADE) / Distancia al SL
+    Calcula la cantidad de cripto arriesgando un % del balance total,
+    basado en la distancia EXACTA al Stop Loss.
     """
     try:
-        acc = client.futures_account()
-        balance = float(acc['availableBalance'])
+        # 1. ¿Cuántos dólares estamos dispuestos a perder? (Ej: 5000 * 3% = 150 USD)
+        risk_usd = balance * (risk_pct / 100)
+                
+        # 2. Distancia real al SL por cada moneda
+        sl_distance = abs(entry_price - sl_price)
         
-        # Validación de Alerta de Drawdown (10%)
-        total_wallet = float(acc['totalMarginBalance'])
-        # Si el balance actual es 10% menor al inicial (asumiendo 1000 de base o similar)
-        # Aquí podrías comparar contra un histórico, por ahora avisamos si el balance baja fuerte
+        if sl_distance <= 0:
+            print("Error: Distancia al SL es 0.")
+            return 0.0
+            
+        # 3. Cantidad a operar
+        qty = risk_usd / sl_distance
         
-        # Cálculo de riesgo en dólares
-        risk_usd = balance * (RISK_PER_TRADE / 100)
-        
-        # En VWAP, la distancia al SL es técnica (RR 0.4)
-        # Usamos una distancia estándar de seguridad para el cálculo inicial de qty
-        # o calculamos basado en el SL real que usará la estrategia
-        # Para simplificar y ser conservadores:
-        stop_dist_pct = 0.01  # Asumimos un SL del 1% para el dimensionamiento
-        
-        qty = risk_usd / (price * stop_dist_pct)
-        
-        # Ajuste de precisión (ETH suele ser 3 decimales, BTC 3)
+        # Ajuste de precisión (ETH 2 decimales, BTC 3)
         if "BTC" in SYMBOL:
             return round(qty, 3)
         return round(qty, 2)
-        
+    
     except Exception as e:
-        logger.error(f"Error calculando riesgo: {e}")
-        return 0.0
-
+            print(f"Error calculando riesgo: {e}")
+            return 0.0    
+        
 def check_drawdown_alert(balance, initial_balance=1000):
     """Avisa por Telegram si la cuenta cae más del 10% del capital inicial"""
     drop = (initial_balance - balance) / initial_balance

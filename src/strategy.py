@@ -5,6 +5,9 @@ def calculate_vwap_bands(df, mult=2.5):
     """
     Cálculo de VWAP Institucional Anclado (Daily Reset)
     con Desviación Estándar Ponderada por Volumen.
+    
+    ATENCIÓN: Para que las bandas coincidan con el backtest y TradingView,
+    el DataFrame DEBE contener la vela de las 00:00 UTC del día en curso.
     """
     df = df.copy()
     
@@ -29,34 +32,42 @@ def calculate_vwap_bands(df, mult=2.5):
     df['upper'] = df['vwap'] + (df['std_dev'] * mult)
     df['lower'] = df['vwap'] - (df['std_dev'] * mult)
     
-    # Filtro EMA 200 (Es clave mantenerlo para no operar contra micro-tendencias fuertes)
-    df['ema_200'] = df['close'].ewm(span=200).mean()
+    # ELIMINADO: Filtro EMA 200. Ahora es pura reversión a la media.
+	df['bar_num'] = df.groupby('date').cumcount()												
     
     return df
 
 def get_vwap_signals(df):
     """
-    Evalúa las últimas dos velas cerradas para generar la señal.
+    Evalúa la última vela cerrada replicando la lógica EXACTA del backtest:
+    Entrada al tocar la banda (High/Low) buscando reversión al VWAP.
     """
-    # Necesitamos al menos 2 velas para comparar
+    # Necesitamos datos suficientes
     if len(df) < 2: 
         return None, None, None
     
+    # Evaluamos la última vela que acaba de cerrar
     last = df.iloc[-1]
-    prev = df.iloc[-2]
+					  
+    # FILTRO DE INICIO DE SESIÓN: 
+    # Ignorar las primeras 120 velas del día porque las bandas están colapsadas.
+    if last['bar_num'] < 120:
+        return None, None, None
     
-    # Lógica SHORT: 
-    # - Vela anterior cerró/tocó por encima de la banda superior
-    # - Vela actual cierra por debajo de la banda superior (reversión hacia adentro)
-    # - El precio está POR DEBAJO de la EMA 200 (Tendencia bajista general)
-    if prev['close'] > prev['upper'] and last['close'] < last['upper'] and last['close'] < last['ema_200']:
-        return "SHORT", last['close'], last['upper']
+    
+    # Lógica SHORT (Clon del backtest): 
+    # El máximo (high) tocó o superó la banda superior y el cierre no se escapó demasiado.
+    if last['high'] >= last['upper'] and last['close'] < (last['upper'] * 1.002):
+        # Retorna: Dirección, Precio de Entrada (Cierre de la vela), y el VWAP (que es tu Take Profit en el backtest)
+																										   
+        return "SHORT", last['close'], last['vwap']
         
-    # Lógica LONG:
-    # - Vela anterior cerró/tocó por debajo de la banda inferior
-    # - Vela actual cierra por encima de la banda inferior (reversión hacia adentro)
-    # - El precio está POR ENCIMA de la EMA 200 (Tendencia alcista general)
-    if prev['close'] < prev['lower'] and last['close'] > last['lower'] and last['close'] > last['ema_200']:
-        return "LONG", last['close'], last['lower']
-        
+    # Lógica LONG (Clon del backtest):
+    # El mínimo (low) tocó o perforó la banda inferior y el cierre no se hundió demasiado.
+    if last['low'] <= last['lower'] and last['close'] > (last['lower'] * 0.998):
+        return "LONG", last['close'], last['vwap']
+    
     return None, None, None
+        
+  
+    

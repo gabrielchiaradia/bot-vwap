@@ -11,15 +11,15 @@ def set_leverage(client, symbol):
     try:
         # 1. Intentar cambiar el apalancamiento
         client.futures_change_leverage(symbol=symbol, leverage=LEVERAGE)
-        logger.info(f"[{BOT_ID}] Apalancamiento configurado a {LEVERAGE}x")
+        logger.info(f"  [{BOT_ID}] Apalancamiento configurado a {LEVERAGE}x")
         # 2. Intentar cambiar el tipo de margen
         try:
             client.futures_change_margin_type(symbol=symbol, marginType='ISOLATED')
-            logger.info(f"[{BOT_ID}] Margen configurado: ISOLATED")
+            logger.info(f"  [{BOT_ID}] Margen configurado: ISOLATED")
         except Exception as e:
             # Si el error es el -4046, lo ignoramos porque ya está en ISOLATED
             if "No need to change margin type" in str(e) or "-4046" in str(e):
-                logger.info(f"[{BOT_ID}] El margen ya era ISOLATED. Continuando...")
+                logger.info(f"  [{BOT_ID}] El margen ya era ISOLATED. Continuando...")
             else:
                 raise e # Si es otro error distinto, que explote para avisar
     except Exception as e:
