@@ -30,7 +30,7 @@ def can_trade(trades_today):
         return False
     return True
 
-def calculate_quantity(calculate_position_size(balance, risk_pct, entry_price, sl_price):
+def calculate_position_size(balance, risk_pct, entry_price, sl_price):
     """
     Calcula la cantidad de cripto arriesgando un % del balance total,
     basado en la distancia EXACTA al Stop Loss.
@@ -46,7 +46,7 @@ def calculate_quantity(calculate_position_size(balance, risk_pct, entry_price, s
             print("Error: Distancia al SL es 0.")
             return 0.0
             
-        # 3. Cantidad a operar
+        # 3. Cantidad a operar.
         qty = risk_usd / sl_distance
         
         # Ajuste de precisión (ETH 2 decimales, BTC 3)
