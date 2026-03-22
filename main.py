@@ -81,6 +81,7 @@ def main():
     logger.info("="*50)
     client = get_client()
     balanceinicial = get_futures_balance(client)
+    balanceinicial = round(balanceinicial, 2)
     print(balanceinicial)
     alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO )
     set_leverage(client, SYMBOL)
