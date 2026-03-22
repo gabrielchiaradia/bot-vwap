@@ -83,7 +83,7 @@ def main():
     client = get_client()
     #balanceinicial = round(get_futures_balance(client),2)
     #print(balanceinicial)
-    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, )
+    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO )
     set_leverage(client, SYMBOL)
 
     cycle_count = 0
