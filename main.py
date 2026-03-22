@@ -21,10 +21,9 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         account = get_account_status(client)
         # Datos de la cuenta
         balance = account['wallet_balance'] # Balance total
-        pnl_str = account.get('totalUnrealizedProfit', "0")
-        pnl = float(pnl_str) if pnl_str else 0.0
-        margin = account['totalMarginBalance']
-        available = account['availableBalance']
+        pnl = account['unrealized_pnl'']
+        margin = account['margin_balance']
+        available = account['available']
 
         check_drawdown_alert(balance)
         # Revisar posiciones abiertas para el dashboard
