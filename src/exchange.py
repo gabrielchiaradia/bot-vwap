@@ -25,13 +25,18 @@ def set_leverage(client, symbol):
     except Exception as e:
         logger.error(f"Error crítico configurando apalancamiento/margen: {e}")
 
-def get_futures_balance(client):
+def get_account_status(client):
     try:
         acc = client.futures_account()
-        return float(acc['availableBalance'])
+        return {
+            "wallet_balance": float(acc['totalWalletBalance']),
+            "unrealized_pnl": float(acc['totalUnrealizedProfit']),
+            "margin_balance": float(acc['totalMarginBalance']),
+            "available": float(acc['availableBalance']),
+        }
     except Exception as e:
-        logger.error(f"Error obteniendo balance: {e}")
-        return 0.0
+        logger.error(f"Error en status de cuenta: {e}")
+        return None
     
 def cancel_all_open_orders(client, symbol):
     """Cancela todas las órdenes LIMIT abiertas para un símbolo"""

@@ -19,7 +19,12 @@ from src.notifier import alert_trade_open, alert_trade_close, alert_error, alert
 def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
     try:
         account = get_account_status(client)
-        balance = account['wallet_balance']
+        # Datos de la cuenta
+        balance = account['wallet_balance'] # Balance total
+        pnl = account['totalUnrealizedProfit']
+        margin = account['totalMarginBalance']
+        available = account['availableBalance']
+
         check_drawdown_alert(balance)
         # Revisar posiciones abiertas para el dashboard
         pos_abierta = get_open_position(client, SYMBOL)
@@ -39,7 +44,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         
         # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
 
-        exportar_status(balance, cycle_count, open_count)
+        exportar_status(balance, cycle_count, pnl, available, open_count)
         exportar_dashboard()
         
         # -- 3. EJECUCIÓN: Si hay señal y no hay posición ---
@@ -62,7 +67,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
            
            # C. GESTIÓN DE RIESGO DINÁMICA
             qty = calculate_position_size(
-                balance=balance,           # Tu balance en vivo (ej: 5000)
+                balance=balance,           # Balance total
                 risk_pct=RISK_PER_TRADE,   # Tu % del .env (ej: 3.0)
                 entry_price=entry_price,   # Precio de entrada
                 sl_price=sl_price          # Precio del SL calculado por tu estrategia
@@ -84,7 +89,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
                     alert_trade_open(SYMBOL, signal, entry_price, sl_price, tp_price, RISK_PER_TRADE)
                     
                     # Forzar refresh del dashboard al abrir trade
-                    exportar_status(balance, cycle_count, 1)
+                    exportar_status(balance, cycle_count, pnl, available, open_count)
                     exportar_dashboard()
                 else:
                     logger.warning(f"Orden rechazada o fallida. Estado: {order.get('status') if order else 'None'}")
