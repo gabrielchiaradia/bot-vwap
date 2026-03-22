@@ -6,7 +6,7 @@ import pandas as pd
 from src.config import SYMBOL, BOT_ID, BAND_MULT, TP_RR_RATIO, RISK_PER_TRADE, BOT_NAME
 from src.logger import logger
 from src.exchange import (
-    get_client, get_futures_balance, set_leverage, 
+    get_client, set_leverage, 
     cancel_all_open_orders, place_limit_order, 
     place_sl_tp, get_open_position, get_account_status
 )
@@ -105,9 +105,9 @@ def main():
     logger.info(f"  BOT {BOT_NAME} INICIADO")
     logger.info(f"  Símbolo: {SYMBOL}")
     client = get_client()
-    balance = get_futures_balance(client)
-    balanceinicial = int(balance)
-    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, balanceinicial )
+    account = get_account_status(client)
+    balance = account['wallet_balance'] 
+    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, balance )
     set_leverage(client, SYMBOL)
 
     cycle_count = 0
