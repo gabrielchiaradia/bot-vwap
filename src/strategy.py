@@ -5,9 +5,6 @@ def calculate_vwap_bands(df, mult=2.5):
     """
     Cálculo de VWAP Institucional Anclado (Daily Reset)
     con Desviación Estándar Ponderada por Volumen.
-    
-    ATENCIÓN: Para que las bandas coincidan con el backtest y TradingView,
-    el DataFrame DEBE contener la vela de las 00:00 UTC del día en curso.
     """
     df = df.copy()
     
@@ -32,8 +29,8 @@ def calculate_vwap_bands(df, mult=2.5):
     df['upper'] = df['vwap'] + (df['std_dev'] * mult)
     df['lower'] = df['vwap'] - (df['std_dev'] * mult)
     
-    # ELIMINADO: Filtro EMA 200. Ahora es pura reversión a la media.
-	df['bar_num'] = df.groupby('date').cumcount()												
+    # 6. Contador de velas para el filtro de inicio de sesión
+    df['bar_num'] = df.groupby('date').cumcount()
     
     return df
 
