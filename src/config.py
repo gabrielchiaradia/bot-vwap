@@ -19,7 +19,7 @@ LEVERAGE = int(os.getenv("LEVERAGE", "20"))
 # Estrategia VWAP
 BAND_MULT = float(os.getenv("BAND_MULT", "2.5"))
 TP_RR_RATIO = float(os.getenv("TP_RR_RATIO", "0.4"))
-RISK_PER_TRADE = float(os.getenv("RISK_PER_TRADE", "4.0"))
+RISK_PER_TRADE = float(os.getenv("RISK_PER_TRADE", "3.0"))
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")

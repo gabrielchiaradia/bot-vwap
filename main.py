@@ -20,7 +20,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
     try:
         balance = get_futures_balance(client)
         check_drawdown_alert(balance)
-        
+        print(balance)
         # Revisar posiciones abiertas para el dashboard
         pos_abierta = get_open_position(client, SYMBOL)
         open_count = 1 if pos_abierta else 0
@@ -81,8 +81,9 @@ def main():
     logger.info(f"  Símbolo: {SYMBOL} | Riesgo: {RISK_PER_TRADE}%")
     logger.info("="*50)
     client = get_client()
-    balanceinicial = round(get_futures_balance(client),2)
-    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, BALANCEINICIAL = balanceinicial)
+    #balanceinicial = round(get_futures_balance(client),2)
+    #print(balanceinicial)
+    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, )
     set_leverage(client, SYMBOL)
 
     cycle_count = 0
