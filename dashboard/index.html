@@ -251,7 +251,7 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
   <div class="status-bar" id="statusBar">
     <div class="status-item"><span class="live-dot off" id="liveDot"></span><strong id="liveLabel">Conectando...</strong></div>
     <div class="status-item">Margin: <strong id="liveBalance">—</strong></div>
-    <div class="status-item">Total Balance: <strong id="liveCycle">—</strong></div>
+    <div class="status-item">Ciclos: <strong id="liveCycle">—</strong></div>
     <div class="status-item">Uptime: <strong id="liveUptime">—</strong></div>
     <div class="status-item">Auto-refresh: <strong>30s</strong></div>
   </div>
@@ -600,7 +600,7 @@ async function fetchLiveData() {
 // ══════════════════════════════════════════════════════════
 function renderStatus(st) {
   document.getElementById('liveBalance').textContent = '$' + (st.balance || 0).toLocaleString('en', {maximumFractionDigits:2});
-  document.getElementById('liveCycle').textContent = '#' + (st.total_balance || 0);
+  document.getElementById('liveCycle').textContent = '#' + (st.cycle_count || 0);
   if (st.uptime_since) {
     const diff = Date.now() - new Date(st.uptime_since).getTime();
     const hrs = Math.floor(diff / 3600000), mins = Math.floor((diff % 3600000) / 60000);
