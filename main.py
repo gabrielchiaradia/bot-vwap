@@ -8,7 +8,7 @@ from src.logger import logger
 from src.exchange import (
     get_client, get_futures_balance, set_leverage, 
     cancel_all_open_orders, place_limit_order, 
-    place_sl_tp, get_open_position
+    place_sl_tp, get_open_position, get_account_status
 )
 from src.strategy import calculate_vwap_bands, get_vwap_signals
 from src.risk import can_trade, calculate_position_size, check_drawdown_alert
@@ -18,7 +18,8 @@ from src.notifier import alert_trade_open, alert_trade_close, alert_error, alert
 
 def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
     try:
-        balance = get_futures_balance(client)
+        account = get_account_status(client)
+        balance = account['wallet_balance']
         check_drawdown_alert(balance)
         # Revisar posiciones abiertas para el dashboard
         pos_abierta = get_open_position(client, SYMBOL)
