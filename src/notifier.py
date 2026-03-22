@@ -50,10 +50,11 @@ def alert_error(context, error):
     msg = _tag(f"⚠️ <b>ERROR</b> en {context}\n<code>{error}</code>")
     _send_async(msg)
     
-def alert_startup(symbols: str, riskreward: str, rr: str):
+def alert_startup(symbols: str, riskpertrade: str, rr: str, balanceinicial: float):
     msg = _tag(
         f"🚀 <b>Bot iniciado</b>\n"
         f"Par: {symbols}\n"
-        f"Risk: {riskreward} - RR: {rr}"
+        f"Risk: {riskpertrade}% - RR: {rr}"
+        f"Balance inicial: {balanceinicial} USDT"
     )
     _send_async(msg)

@@ -80,16 +80,18 @@ def main():
     logger.info(f"  BOT {BOT_NAME} INICIADO")
     logger.info(f"  Símbolo: {SYMBOL} | Riesgo: {RISK_PER_TRADE}%")
     logger.info("="*50)
-    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO)
     client = get_client()
+    balanceinicial = round(get_futures_balance(client),2)
+    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, BALANCEINICIAL = balanceinicial)
     set_leverage(client, SYMBOL)
 
     cycle_count = 0
     while True:
-        logger.info("="*50)
-        logger.info(f"  BOT {BOT_NAME}  R/R: {TP_RR_RATIO} Riesgo: {RISK_PER_TRADE}%")
-        logger.info(F"  Bot corriendo daunte {cycle_count} minutos")
-        logger.info("="*50)
+        if cycle_count % 60 == 0:
+            logger.info("="*50)
+            logger.info(f"  BOT {BOT_NAME}  R/R: {TP_RR_RATIO} Riesgo: {RISK_PER_TRADE}%")
+            logger.info(F"  Bot corriendo daunte {cycle_count} minutos")
+            logger.info("="*50)
         run_cycle(client, cycle_count)
         cycle_count += 1      
         time.sleep(60)  # Esperamos al cierre del minuto para recalcular bandas
