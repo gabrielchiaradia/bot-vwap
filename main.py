@@ -8,7 +8,7 @@ from src.logger import logger
 from src.exchange import (
     get_client, get_futures_balance, set_leverage, 
     cancel_all_open_orders, place_limit_order, 
-    place_sl_tp, get_open_position, get_total_balance
+    place_sl_tp, get_open_position
 )
 from src.strategy import calculate_vwap_bands, get_vwap_signals
 from src.risk import can_trade, calculate_position_size, check_drawdown_alert
