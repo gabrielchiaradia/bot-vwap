@@ -33,14 +33,6 @@ def get_futures_balance(client):
         logger.error(f"Error obteniendo balance: {e}")
         return 0.0
     
-def get_total_balance(client):
-    try:
-        acc = client.futures_account()
-        return float(acc['Balance'])
-    except Exception as e:
-        logger.error(f"Error obteniendo balance: {e}")
-        return 0.0
-
 def cancel_all_open_orders(client, symbol):
     """Cancela todas las órdenes LIMIT abiertas para un símbolo"""
     try:

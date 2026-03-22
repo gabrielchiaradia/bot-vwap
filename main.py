@@ -37,10 +37,8 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         signal, entry_price, tp_price = get_vwap_signals(df_bands)
         
         # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
-        total_balance = get_total_balance(client)
-        print(total_balance)
 
-        exportar_status(balance, total_balance, open_count)
+        exportar_status(balance, cycle_count, open_count)
         exportar_dashboard()
         
         # -- 3. EJECUCIÓN: Si hay señal y no hay posición ---
@@ -85,7 +83,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
                     alert_trade_open(SYMBOL, signal, entry_price, sl_price, tp_price, RISK_PER_TRADE)
                     
                     # Forzar refresh del dashboard al abrir trade
-                    exportar_status(balance, total_balance, 1)
+                    exportar_status(balance, cycle_count, 1)
                     exportar_dashboard()
                 else:
                     logger.warning(f"Orden rechazada o fallida. Estado: {order.get('status') if order else 'None'}")

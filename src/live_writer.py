@@ -61,7 +61,7 @@ def _calc_duration(trade: dict) -> Optional[float]:
 
 # ── Exportar estado del bot ───────────────────────────────
 
-def exportar_status(balance: float, total_balance: float, open_trades_count: int):
+def exportar_status(balance: float, cycle_count: int, open_trades_count: int):
     """Estado general del bot formateado para el header del dashboard."""
     data = {
         "bot_name": BOT_NAME,
@@ -72,7 +72,7 @@ def exportar_status(balance: float, total_balance: float, open_trades_count: int
         "risk_per_trade": RISK_PER_TRADE,
         "max_open_trades": 1, # VWAP abre 1 a la vez
         "balance": round(balance, 2),
-        "total_balance": total_balance,
+        "cycle_count": cycle_count,
         "open_trades": open_trades_count,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "uptime_since": _BOOT_TIME,
