@@ -252,6 +252,7 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
     <div class="status-item"><span class="live-dot off" id="liveDot"></span><strong id="liveLabel">Conectando...</strong></div>
     <div class="status-item">Balance: <strong id="liveBalance">—</strong></div>
     <div class="status-item">Margin: <strong id="liveMargin">—</strong></div>
+    <div class="status-item">PnL: <strong id="livePNL">—</strong></div>
     <div class="status-item">Uptime: <strong id="liveUptime">—</strong></div>
     <div class="status-item">Auto-refresh: <strong>30s</strong></div>
   </div>
@@ -601,6 +602,7 @@ async function fetchLiveData() {
 function renderStatus(st) {
   document.getElementById('liveBalance').textContent = '$' + (st.balance || 0).toLocaleString('en', {maximumFractionDigits:2});
   document.getElementById('liveMargin').textContent = '$' + (st.available || 0).toLocaleString('en', {maximumFractionDigits:2});
+  document.getElementById('livePNL').textContent = '$' + (st.unrealized_pnl || 0).toLocaleString('en', {maximumFractionDigits:2});
   if (st.uptime_since) {
     const diff = Date.now() - new Date(st.uptime_since).getTime();
     const hrs = Math.floor(diff / 3600000), mins = Math.floor((diff % 3600000) / 60000);
@@ -609,6 +611,7 @@ function renderStatus(st) {
 }
 
 function renderPositions(data) {
+  console.log("Datos crudos recibidos:", data);
   const positions = data.positions || [];
   document.getElementById('posCount').textContent = positions.length;
   if (!positions.length) { document.getElementById('posBody').innerHTML = '<div class="pos-empty">Sin posiciones abiertas</div>'; return; }
