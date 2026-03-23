@@ -96,15 +96,30 @@ def exportar_dashboard():
         # Creamos una copia para inyectar variables extra de compatibilidad
         t_dash = t.copy()
         
-        # Mapeo vital: El dashboard Scalp busca "open_time"
+        # 1. Mapeo vital: El dashboard Scalp busca "open_time"
         if "entry_time" in t_dash and "open_time" not in t_dash:
             t_dash["open_time"] = t_dash["entry_time"]
             
+        # 2. FIX DE LA HORA (El Parche)
+        # Le sacamos el "+00:00" mentiroso. Al dejar el string sin zona horaria, 
+        # el navegador de tu frontend va a mostrar la hora tal cual está en el texto.
+        if isinstance(t_dash.get("open_time"), str):
+            t_dash["open_time"] = t_dash["open_time"].replace("+00:00", "")
+            # Si querés sumarle la hora de diferencia del servidor para que coincida 
+            # exacto con tu reloj, tendrías que parsearlo, pero sacar el +00:00 ya ayuda a estabilizarlo.
+
+        # 3. Inyectar variables que faltan en el JSON crudo
+        if "risk_pct" not in t_dash:
+            t_dash["risk_pct"] = 3.0  # O el valor de riesgo que uses por defecto
+            
         t_dash["duration_min"] = _calc_duration(t_dash)
         
+        # 4. Separación y PnL
         if t_dash.get("status") == "CLOSED":
             closed_trades.append(t_dash)
         elif t_dash.get("status") == "OPEN":
+            # Mapeamos el PnL para que el dashboard lo lea bien
+            t_dash["unrealized_pnl"] = t_dash.get("pnl", 0.0) 
             open_trades.append(t_dash)
 
     _safe_write(_dashboard_path(), closed_trades)
