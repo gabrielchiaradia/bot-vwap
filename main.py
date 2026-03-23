@@ -106,7 +106,7 @@ def main():
     logger.info(f"  Símbolo: {SYMBOL}")
     client = get_client()
     account = get_account_status(client)
-    balance = account['wallet_balance'] 
+    balance = round(account['wallet_balance'] ,2)
     alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, balance )
     set_leverage(client, SYMBOL)
 
