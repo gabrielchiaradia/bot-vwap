@@ -118,8 +118,20 @@ def exportar_dashboard():
         if t_dash.get("status") == "CLOSED":
             closed_trades.append(t_dash)
         elif t_dash.get("status") == "OPEN":
-            # Mapeamos el PnL para que el dashboard lo lea bien
-            t_dash["unrealized_pnl"] = t_dash.get("pnl", 0.0) 
+            # --- MAGIA DEL PnL EN VIVO ---
+            try:
+                # Le preguntamos a Binance el estado actual de esa moneda
+                pos_info = client.futures_position_information(symbol=t_dash["symbol"])
+                
+                # Binance devuelve una lista, buscamos la posición que tenga tamaño (positionAmt)
+                for pos in pos_info:
+                    if float(pos["positionAmt"]) != 0:
+                        # Extraemos el PnL flotante oficial que calcula el exchange
+                        t_dash["unrealized_pnl"] = float(pos["unrealizedProfit"])
+                        break
+            except Exception as e:
+                # Si hay error de conexión, dejamos el 0.0 temporalmente
+                t_dash["unrealized_pnl"] = 0.0
             open_trades.append(t_dash)
 
     _safe_write(_dashboard_path(), closed_trades)
