@@ -85,56 +85,77 @@ def exportar_status(balance: float, cycle_count: int, pnl: float, margin: float,
 # ── Exportar listas de trades ─────────────────────────────
 
 def exportar_dashboard(client):
-    from src.journal import _load
+    from datetime import datetime, timezone
+    from src.journal import _load, _safe_write, _journal_path
+    
     all_trades = _load()
+    ahora = datetime.now(timezone.utc).isoformat() # Capturamos el momento exacto
+    
+    modified_journal = False
     closed_trades = []
     open_trades = []
 
+    try:
+        # Obtenemos info de todas las posiciones abiertas en Binance
+        actual_positions = client.futures_position_information()
+        # Mapeamos los símbolos activos para búsqueda rápida
+        active_map = {}
+        for p in actual_positions:
+            amt = float(p['positionAmt'])
+            if amt != 0:
+                # Guardamos la dirección real de Binance para comparar
+                side_real = "LONG" if amt > 0 else "SHORT"
+                active_map[p['symbol']] = {
+                    "side": side_real,
+                    "pnl": float(p.get("unrealizedProfit", 0)),
+                    "amt": amt
+                }
+    except Exception as e:
+        print(f"[DASHBOARD] Error consultando Binance: {e}")
+        return # Si falla la API, no arriesgamos a cerrar trades por error
+
     for t in all_trades:
         t_dash = t.copy()
+        symbol = t_dash["symbol"]
+        side_bot = t_dash["direction"]
         
-        if "entry_time" in t_dash and "open_time" not in t_dash:
-            t_dash["open_time"] = t_dash["entry_time"]
-            
-        if isinstance(t_dash.get("open_time"), str):
-            t_dash["open_time"] = t_dash["open_time"].replace("+00:00", "")
-
-        if "risk_pct" not in t_dash:
-            t_dash["risk_pct"] = 3.0  
-            
-        t_dash["duration_min"] = _calc_duration(t_dash)
+        # BUSCAMOS LA POSICIÓN REAL EN EL MAPA
+        real_pos = active_map.get(symbol)
         
+       # LÓGICA DE CIERRE MEJORADA:
+        # Si el journal dice OPEN pero:
+        # 1. No hay nada en Binance para ese símbolo OR
+        # 2. Hay algo en Binance pero es de la dirección OPUESTA (ej: Bot dice LONG y hay un SHORT)
+        if t_dash.get("status") == "OPEN":
+            debe_cerrar = False
+            if not real_pos:
+                debe_cerrar = True
+                print(f"✅ Sincronizando cierre de {symbol}...")
+            elif real_pos["side"] != side_bot:
+                debe_cerrar = True
+                print(f"✅ Sincronizando cierre de {symbol}...")
+                
+            if debe_cerrar:
+                print(f"🧹 Limpiando trade desincronizado: {symbol} {side_bot} (ID: {t_dash['trade_id']})")
+                t_dash["status"] = "CLOSED"
+                t_dash["close_time"] = ahora
+                t["status"] = "CLOSED"
+                t["close_time"] = ahora
+                modified_journal = True
+                
+        # Clasificación para los archivos del Frontend
         if t_dash.get("status") == "CLOSED":
             closed_trades.append(t_dash)
-            
-        elif t_dash.get("status") == "OPEN":
-            if client:
-                try:
-                    # Traemos la info de futuros
-                    pos_info = client.futures_position_information(symbol=t_dash["symbol"])
-                    
-                    encontro_activa = False
-                    for pos in pos_info:
-                        # Verificamos si hay una posición con cantidad (positionAmt)
-                        # Usamos .get() con un valor por defecto para evitar el Crash
-                        amt = float(pos.get("positionAmt", 0))
-                        
-                        if amt != 0:
-                            # Intentamos sacar el PnL de las dos formas comunes en la API
-                            pnl_flotante = pos.get("unrealizedProfit") or pos.get("unRealizedProfit") or 0.0
-                            t_dash["unrealized_pnl"] = float(pnl_flotante)
-                            encontro_activa = True
-                            break
-                    
-                    if not encontro_activa:
-                        t_dash["unrealized_pnl"] = 0.0
-                        
-                except Exception as e:
-                    print(f"[DASHBOARD ERROR] No se pudo parsear el PnL: {e}")
-                    t_dash["unrealized_pnl"] = 0.0
-            
-            open_trades.append(t_dash)
+        else:
+            # CASO B: El trade sigue OPEN, actualizamos su PnL en vivo para el front
+           if real_pos:
+                t_dash["unrealized_pnl"] = real_pos["pnl"]
+                open_trades.append(t_dash)
 
-    # Reemplazá esto por tus funciones reales de guardado
-    _safe_write(_dashboard_path(), closed_trades)
-    _safe_write(_positions_path(), open_trades)
+    # 1. Si hubo cierres, actualizamos la "Base de Datos" (journal.json)
+    if modified_journal:
+        _safe_write(_journal_path(), all_trades)
+
+    # 2. Exportamos las vistas filtradas para JavaScript
+    _safe_write(_positions_path(), open_trades)  # Va a positions.json
+    _safe_write(_dashboard_path(), closed_trades) # Va a dashboard.json
