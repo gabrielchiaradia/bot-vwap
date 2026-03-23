@@ -84,55 +84,63 @@ def exportar_status(balance: float, cycle_count: int, pnl: float, margin: float,
 
 # ── Exportar listas de trades ─────────────────────────────
 
-def exportar_dashboard():
+def exportar_dashboard(client=None):
     """Lee el journal VWAP y lo formatea para el Frontend."""
     from src.journal import _load
-    all_trades = _load()
+    import os
     
+    # Si la función se llama sin client, lo creamos internamente
+    if client is None:
+        from binance.client import Client
+        from dotenv import load_dotenv
+        load_dotenv()
+        
+        # Asegurate de que estos nombres coincidan con los de tu archivo .env
+        api_key = os.getenv("BINANCE_API_KEY")
+        api_secret = os.getenv("BINANCE_API_SECRET")
+        
+        # Solo creamos el cliente si encontramos las keys
+        if api_key and api_secret:
+            client = Client(api_key, api_secret)
+
+    all_trades = _load()
     closed_trades = []
     open_trades = []
 
     for t in all_trades:
-        # Creamos una copia para inyectar variables extra de compatibilidad
         t_dash = t.copy()
         
-        # 1. Mapeo vital: El dashboard Scalp busca "open_time"
         if "entry_time" in t_dash and "open_time" not in t_dash:
             t_dash["open_time"] = t_dash["entry_time"]
             
-        # 2. FIX DE LA HORA (El Parche)
-        # Le sacamos el "+00:00" mentiroso. Al dejar el string sin zona horaria, 
-        # el navegador de tu frontend va a mostrar la hora tal cual está en el texto.
         if isinstance(t_dash.get("open_time"), str):
             t_dash["open_time"] = t_dash["open_time"].replace("+00:00", "")
-            # Si querés sumarle la hora de diferencia del servidor para que coincida 
-            # exacto con tu reloj, tendrías que parsearlo, pero sacar el +00:00 ya ayuda a estabilizarlo.
 
-        # 3. Inyectar variables que faltan en el JSON crudo
         if "risk_pct" not in t_dash:
-            t_dash["risk_pct"] = 3.0  # O el valor de riesgo que uses por defecto
+            t_dash["risk_pct"] = 3.0  
             
         t_dash["duration_min"] = _calc_duration(t_dash)
         
-        # 4. Separación y PnL
         if t_dash.get("status") == "CLOSED":
             closed_trades.append(t_dash)
+            
         elif t_dash.get("status") == "OPEN":
-            # --- MAGIA DEL PnL EN VIVO ---
-            try:
-                # Le preguntamos a Binance el estado actual de esa moneda
-                pos_info = client.futures_position_information(symbol=t_dash["symbol"])
-                
-                # Binance devuelve una lista, buscamos la posición que tenga tamaño (positionAmt)
-                for pos in pos_info:
-                    if float(pos["positionAmt"]) != 0:
-                        # Extraemos el PnL flotante oficial que calcula el exchange
-                        t_dash["unrealized_pnl"] = float(pos["unrealizedProfit"])
-                        break
-            except Exception as e:
-                # Si hay error de conexión, dejamos el 0.0 temporalmente
+            # Si el client existe, le preguntamos a Binance el PnL en vivo
+            if client:
+                try:
+                    pos_info = client.futures_position_information(symbol=t_dash["symbol"])
+                    for pos in pos_info:
+                        if float(pos["positionAmt"]) != 0:
+                            t_dash["unrealized_pnl"] = float(pos["unrealizedProfit"])
+                            break
+                except Exception as e:
+                    t_dash["unrealized_pnl"] = 0.0
+            else:
+                # Si no hay client por algún motivo, dejamos en 0.0
                 t_dash["unrealized_pnl"] = 0.0
+                
             open_trades.append(t_dash)
 
+    # Reemplazá esto por tus funciones reales de guardado
     _safe_write(_dashboard_path(), closed_trades)
     _safe_write(_positions_path(), open_trades)
