@@ -84,25 +84,8 @@ def exportar_status(balance: float, cycle_count: int, pnl: float, margin: float,
 
 # ── Exportar listas de trades ─────────────────────────────
 
-def exportar_dashboard(client=None):
-    """Lee el journal VWAP y lo formatea para el Frontend."""
+def exportar_dashboard(client):
     from src.journal import _load
-    import os
-    
-    # Si la función se llama sin client, lo creamos internamente
-    if client is None:
-        from binance.client import Client
-        from dotenv import load_dotenv
-        load_dotenv()
-        
-        # Asegurate de que estos nombres coincidan con los de tu archivo .env
-        api_key = os.getenv("BINANCE_API_KEY")
-        api_secret = os.getenv("BINANCE_API_SECRET")
-        
-        # Solo creamos el cliente si encontramos las keys
-        if api_key and api_secret:
-            client = Client(api_key, api_secret)
-
     all_trades = _load()
     closed_trades = []
     open_trades = []
@@ -127,28 +110,29 @@ def exportar_dashboard(client=None):
         elif t_dash.get("status") == "OPEN":
             if client:
                 try:
-                    # Buscamos la info en Binance
+                    # Traemos la info de futuros
                     pos_info = client.futures_position_information(symbol=t_dash["symbol"])
                     
-                    encontro_posicion = False
+                    encontro_activa = False
                     for pos in pos_info:
-                        if float(pos["positionAmt"]) != 0:
-                            t_dash["unrealized_pnl"] = float(pos["unrealizedProfit"])
-                            print(f"[DASHBOARD] PnL en vivo obtenido para {t_dash['symbol']}: {t_dash['unrealized_pnl']}")
-                            encontro_posicion = True
+                        # Verificamos si hay una posición con cantidad (positionAmt)
+                        # Usamos .get() con un valor por defecto para evitar el Crash
+                        amt = float(pos.get("positionAmt", 0))
+                        
+                        if amt != 0:
+                            # Intentamos sacar el PnL de las dos formas comunes en la API
+                            pnl_flotante = pos.get("unrealizedProfit") or pos.get("unRealizedProfit") or 0.0
+                            t_dash["unrealized_pnl"] = float(pnl_flotante)
+                            encontro_activa = True
                             break
-                            
-                    if not encontro_posicion:
-                        print(f"[DASHBOARD] Binance dice que no hay posición abierta para {t_dash['symbol']}")
+                    
+                    if not encontro_activa:
                         t_dash["unrealized_pnl"] = 0.0
                         
                 except Exception as e:
-                    print(f"[DASHBOARD ERROR] Falló la consulta a Binance: {e}")
+                    print(f"[DASHBOARD ERROR] No se pudo parsear el PnL: {e}")
                     t_dash["unrealized_pnl"] = 0.0
-            else:
-                print("[DASHBOARD AVISO] No se pasó el 'client', imposible buscar PnL en vivo.")
-                t_dash["unrealized_pnl"] = 0.0
-                
+            
             open_trades.append(t_dash)
 
     # Reemplazá esto por tus funciones reales de guardado
