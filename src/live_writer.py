@@ -86,7 +86,7 @@ def exportar_status(balance: float, cycle_count: int, pnl: float, margin: float,
 
 def exportar_dashboard(client):
     from datetime import datetime, timezone
-    from src.journal import _load, _safe_write, _journal_path
+    from src.journal import _load, _save
     
     all_trades = _load()
     ahora = datetime.now(timezone.utc).isoformat() # Capturamos el momento exacto
@@ -148,14 +148,15 @@ def exportar_dashboard(client):
             closed_trades.append(t_dash)
         else:
             # CASO B: El trade sigue OPEN, actualizamos su PnL en vivo para el front
-           if real_pos:
+            if real_pos:
                 t_dash["unrealized_pnl"] = real_pos["pnl"]
-                open_trades.append(t_dash)
+            open_trades.append(t_dash)
 
     # 1. Si hubo cierres, actualizamos la "Base de Datos" (journal.json)
     if modified_journal:
-        _safe_write(_journal_path(), all_trades)
-
+        _save(all_trades)
+        logger.info(f"✅ Sincronización completa: {len(all_trades)} trades en el journal.")
+        
     # 2. Exportamos las vistas filtradas para JavaScript
     _safe_write(_positions_path(), open_trades)  # Va a positions.json
     _safe_write(_dashboard_path(), closed_trades) # Va a dashboard.json
