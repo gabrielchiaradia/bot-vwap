@@ -611,16 +611,43 @@ function renderStatus(st) {
 }
 
 function renderPositions(data) {
-  console.log("Datos crudos recibidos:", data);
-  const positions = data.positions || [];
+  // 1. data ya es el array, así que lo asignamos directo (o soportamos ambos formatos por las dudas)
+  const positions = Array.isArray(data) ? data : (data.positions || []);
+  
   document.getElementById('posCount').textContent = positions.length;
-  if (!positions.length) { document.getElementById('posBody').innerHTML = '<div class="pos-empty">Sin posiciones abiertas</div>'; return; }
+  
+  if (!positions.length) { 
+    document.getElementById('posBody').innerHTML = '<div class="pos-empty">Sin posiciones abiertas</div>'; 
+    return; 
+  }
+  
   let html = '<div style="overflow-x:auto"><div class="pos-row" style="font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)"><span>Símbolo</span><span>Dir</span><span>Entry</span><span>SL</span><span>TP</span><span>Score</span><span>Abierto</span><span>Bot</span></div>';
+  
   positions.forEach(p => {
     const dirC = p.direction === 'LONG' ? 'badge-long' : 'badge-short';
-    const opened = p.opened_at ? new Date(p.opened_at).toLocaleString('es-AR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
-    html += `<div class="pos-row"><span style="color:var(--text-strong);font-weight:600">${p.symbol}</span><span><span class="badge ${dirC}">${p.direction}</span></span><span>$${Number(p.entry_price).toFixed(2)}</span><span style="color:var(--red)">$${Number(p.sl_price).toFixed(2)}</span><span style="color:var(--green)">$${Number(p.tp_price).toFixed(2)}</span><span style="color:var(--yellow)">${p.score||'—'}</span><span style="color:var(--muted)">${opened}</span><span style="color:var(--muted);font-size:10px">${p.bot||'—'}</span></div>`;
+    
+    // 2. Corregimos el nombre de la variable de tiempo según tu console.log
+    const timeVal = p.entry_time || p.opened_at;
+    const opened = timeVal ? new Date(timeVal).toLocaleString('es-AR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
+    
+    // 3. Agregamos un fallback (||) por si desde Python exportás 'entry' en vez de 'entry_price', etc.
+    const entry = Number(p.entry_price || p.entry || 0).toFixed(2);
+    const sl = Number(p.sl_price || p.sl || 0).toFixed(2);
+    const tp = Number(p.tp_price || p.tp || 0).toFixed(2);
+    const botName = p.bot_id || p.bot || '—';
+
+    html += `<div class="pos-row">
+               <span style="color:var(--text-strong);font-weight:600">${p.symbol}</span>
+               <span><span class="badge ${dirC}">${p.direction}</span></span>
+               <span>$${entry}</span>
+               <span style="color:var(--red)">$${sl}</span>
+               <span style="color:var(--green)">$${tp}</span>
+               <span style="color:var(--yellow)">${p.score || '—'}</span>
+               <span style="color:var(--muted)">${opened}</span>
+               <span style="color:var(--muted);font-size:10px">${botName}</span>
+             </div>`;
   });
+  
   document.getElementById('posBody').innerHTML = html + '</div>';
 }
 
