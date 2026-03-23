@@ -29,6 +29,11 @@ def calculate_vwap_bands(df, mult=2.5):
     df['upper'] = df['vwap'] + (df['std_dev'] * mult)
     df['lower'] = df['vwap'] - (df['std_dev'] * mult)
     
+    # 6. Cálculos para Filtros de Volatilidad 
+    df['band_width'] = df['upper'] - df['lower']
+    # Promedio del ancho de banda de las últimas 20 velas
+    df['avg_band_width'] = df['band_width'].rolling(window=20).mean()
+        
     # 6. Contador de velas para el filtro de inicio de sesión
     df['bar_num'] = df.groupby('date').cumcount()
     
@@ -40,7 +45,7 @@ def get_vwap_signals(df):
     Entrada al tocar la banda (High/Low) buscando reversión al VWAP.
     """
     # Necesitamos datos suficientes
-    if len(df) < 2: 
+    if len(df) < 20: 
         return None, None, None
     
     # Evaluamos la última vela que acaba de cerrar
@@ -50,7 +55,26 @@ def get_vwap_signals(df):
     # Ignorar las primeras 120 velas del día porque las bandas están colapsadas.
     if last['bar_num'] < 120:
         return None, None, None
+    # FILTROS ANTI-LATIGAZOS (VOLATILIDAD
+    # 1. Cálculo de salto de VWAP (comparamos la vela actual con la de hace 3 periodos)
+    vwap_now = last['vwap']
+    vwap_prev = df['vwap'].iloc[-4] # -4 nos da la vela de hace 3 cierres
+    vwap_change = abs((vwap_now - vwap_prev) / vwap_prev)
     
+    # Parámetros (Podés ajustarlos según backtest)
+    LIMITE_SALTO_VWAP = 0.005 # 0.5% de cambio en 3 velas (latigazo)
+    LIMITE_EXPANSION = 2.0    # 2.0x (El doble de ancho que el promedio normal)
+    
+    # Verificación 1: ¿El VWAP se inclinó violentamente?
+    if vwap_change > LIMITE_SALTO_VWAP:
+        print(f"Bloqueo: Salto gigante de VWAP detectado ({vwap_change:.4f})")
+        return None, None, None
+
+    # Verificación 2: ¿Las bandas se abrieron como boca de cocodrilo?
+    if not pd.isna(last['avg_band_width']):
+        if last['band_width'] > (last['avg_band_width'] * LIMITE_EXPANSION):
+            print(f"Bloqueo: Expansión violenta de bandas (Ancho: {last['band_width']:.2f})")
+            return None, None, None
     
     # Lógica SHORT (Clon del backtest): 
     # El máximo (high) tocó o superó la banda superior y el cierre no se escapó demasiado.

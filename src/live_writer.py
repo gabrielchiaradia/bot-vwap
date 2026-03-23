@@ -61,7 +61,7 @@ def _calc_duration(trade: dict) -> Optional[float]:
 
 # ── Exportar estado del bot ───────────────────────────────
 
-def exportar_status(balance: float, cycle_count: int, pnl: float, available: float, open_trades_count: int):
+def exportar_status(balance: float, cycle_count: int, pnl: float, margin: float,available: float, open_trades_count: int):
     """Estado general del bot formateado para el header del dashboard."""
     data = {
         "bot_name": BOT_NAME,
@@ -74,6 +74,7 @@ def exportar_status(balance: float, cycle_count: int, pnl: float, available: flo
         "balance": round(balance, 2),
         "cycle_count": cycle_count,
         "pnl": round(pnl, 2),
+        "margin": round(margin, 2),
         "available": round(available, 2),
         "open_trades": open_trades_count,
         "updated_at": datetime.now(timezone.utc).isoformat(),

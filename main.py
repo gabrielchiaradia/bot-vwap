@@ -44,7 +44,7 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         
         # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
 
-        exportar_status(balance, cycle_count, pnl, available, open_count)
+        exportar_status(balance, cycle_count, pnl, margin, available, open_count)
         exportar_dashboard()
         
         # -- 3. EJECUCIÓN: Si hay señal y no hay posición ---

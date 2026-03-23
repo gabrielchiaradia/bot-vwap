@@ -62,11 +62,12 @@ def cancel_all_open_orders(client, symbol):
         logger.error(f"Error cancelando órdenes: {e}")
 
 def place_limit_order(client, symbol, side, price, quantity):
-    """Coloca una orden LIMIT (Maker)"""
+    """Coloca una orden LIMIT (Maker estricto). Si el precio ya cruzó, aborta."""
     try:
         price = round(float(price), 2) 
         quantity = round(float(quantity), 3)
-        # Usamos Post Only para asegurar que siempre seamos MAKER (menos fees)
+        
+        # Usamos Post Only para asegurar que siempre seamos MAKER (comisiones bajas)
         order = client.futures_create_order(
             symbol=symbol,
             side=side,
@@ -75,26 +76,21 @@ def place_limit_order(client, symbol, side, price, quantity):
             quantity=quantity,
             price=price
         )
-        logger.info(f"[{BOT_ID}] Orden LIMIT {side} colocada en {price}")
+        logger.info(f"[{BOT_ID}] ✅ Orden LIMIT {side} colocada en {price}")
         return order
-    except Exception as e:
-        # Buscamos el error -5022 (Post-Only rejected) o el mensaje clásico
-        error_str = str(e)
-        if "5022" in error_str or "immediately trigger" in error_str or "Post Only" in error_str:
-            logger.warning(f"[{symbol}] Precio cruzó la banda (Post-Only rechazado). Entrando por MARKET...")
-            try:
-                return client.futures_create_order(
-                    symbol=symbol,
-                    side=side,
-                    type=FUTURE_ORDER_TYPE_MARKET,
-                    quantity=quantity # Asegurate que la variable se llame qty o quantity según tu código
-                )
-            except Exception as market_e:
-                logger.error(f"Error en entrada Market de respaldo: {market_e}")
-                return None
         
-        logger.error(f"Error colocando LIMIT: {e}")
+    except Exception as e:
+        error_str = str(e)
+        
+        # Si Binance rechaza por Post-Only, llegamos tarde al rebote.
+        if "5022" in error_str or "immediately trigger" in error_str or "Post Only" in error_str:
+            logger.warning(f"[{symbol}] ⏳ Oportunidad perdida: El precio ya cruzó la banda ({price}). Abortando entrada para proteger el Risk/Reward y evitar Taker Fees.")
+            return None # Devolvemos None, la operación se cancela limpiamente.
+            
+        # Si es cualquier otro error (falta de saldo, desconexión, etc)
+        logger.error(f"❌ Error colocando LIMIT: {e}")
         return None
+
 
 def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
     """Coloca las órdenes de protección una vez entramos al trade"""
@@ -123,7 +119,7 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
             quantity=qty,
             reduceOnly=True
         )
-        logger.info(f"[{BOT_ID}] Protección colocada: SL {sl_price} | TP {tp_price}")
+        logger.info(f"[{BOT_ID}] ✅ Protección colocada: SL {sl_price} | TP {tp_price}")
     except Exception as e:
         logger.error(f"Error colocando SL/TP: {e}")
 
