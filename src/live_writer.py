@@ -125,18 +125,28 @@ def exportar_dashboard(client=None):
             closed_trades.append(t_dash)
             
         elif t_dash.get("status") == "OPEN":
-            # Si el client existe, le preguntamos a Binance el PnL en vivo
             if client:
                 try:
+                    # Buscamos la info en Binance
                     pos_info = client.futures_position_information(symbol=t_dash["symbol"])
+                    
+                    encontro_posicion = False
                     for pos in pos_info:
                         if float(pos["positionAmt"]) != 0:
                             t_dash["unrealized_pnl"] = float(pos["unrealizedProfit"])
+                            print(f"[DASHBOARD] PnL en vivo obtenido para {t_dash['symbol']}: {t_dash['unrealized_pnl']}")
+                            encontro_posicion = True
                             break
+                            
+                    if not encontro_posicion:
+                        print(f"[DASHBOARD] Binance dice que no hay posición abierta para {t_dash['symbol']}")
+                        t_dash["unrealized_pnl"] = 0.0
+                        
                 except Exception as e:
+                    print(f"[DASHBOARD ERROR] Falló la consulta a Binance: {e}")
                     t_dash["unrealized_pnl"] = 0.0
             else:
-                # Si no hay client por algún motivo, dejamos en 0.0
+                print("[DASHBOARD AVISO] No se pasó el 'client', imposible buscar PnL en vivo.")
                 t_dash["unrealized_pnl"] = 0.0
                 
             open_trades.append(t_dash)
