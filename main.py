@@ -23,7 +23,7 @@ def inicializar():
 
     # Notificación de arranque
     balance_inicial = get_account_status(client)['wallet_balance']
-    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, balance_inicial)
+    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, BAND_MULT, balance_inicial)
     
     return client
 
