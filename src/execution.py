@@ -20,29 +20,43 @@ def gestionar_resguardo_posicion(client, symbol):
     Busca el trade activo en el journal y llama a la función de exchange
     para asegurar que los Stop Loss y Take Profit sigan vivos en Binance.
     """
+    from src.journal import _load
+    from src.config import BOT_ID
+    from src.logger import logger
+    
     try:
         all_trades = _load()
+        current_trade = None
         
-        # Buscamos en la lista el trade que coincida con el símbolo, que sea de este bot y esté OPEN
-        current_trade = next((t for t in all_trades 
-                              if t.get('symbol') == symbol 
-                              and t.get('status') == 'OPEN' 
-                              and t.get('bot_id') == BOT_ID), None)
-        
+        # 1. Búsqueda explícita paso a paso
+        for t in all_trades:
+            if t.get('symbol') == symbol and t.get('status') == 'OPEN':
+                current_trade = t
+                break # Lo encontramos, cortamos la búsqueda
+                
+        # 2. Evaluación del trade
         if current_trade:
-           # Si el trade se abrió a mano, no intentamos ponerle SL/TP automáticos
-            # porque los valores están en 0.0. Simplemente lo dejamos ser.
-            if current_trade.get('bot_id') == "MANUAL":
-                pass 
-            else:
-                # Si lo encontramos, le pasamos la pelota a tu función de rescate original
+            # Vemos de quién es el trade (si no dice, asumimos que es de este bot)
+            owner = current_trade.get('bot_id', BOT_ID)
+            
+            if owner == "MANUAL":
+                # Es manual: El bot lo ignora silenciosamente para no ponerle SL/TP
+                return 
+            elif owner == BOT_ID:
+                # Es nuestro: Lo rescatamos
+                from src.exchange import verificar_y_rescatar_sl_tp
                 verificar_y_rescatar_sl_tp(client, symbol, current_trade)
+            else:
+                # Es de otro bot (ej: de ETH si este es de BTC), no hacemos nada
+                pass
+                
         else:
+            # Si llegó acá, es porque en el JSON no hay ningún trade OPEN para esta moneda
             logger.warning(f"[{symbol}] Hay posición en Binance pero no encontré el trade OPEN en el Journal.")
             
     except Exception as e:
         logger.error(f"Error en gestionar_resguardo_posicion para {symbol}: {e}")
-
+        
 def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct):
     """
     Orquesta la apertura: Cancela previas, pone LIMIT, espera FILL y clava SL/TP.

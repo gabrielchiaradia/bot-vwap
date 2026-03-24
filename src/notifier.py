@@ -55,6 +55,6 @@ def alert_startup(symbols: str, riskpertrade: str, rr: str, balanceinicial: int)
         f"🚀 <b>Bot iniciado</b>\n"
         f"Par: {symbols}\n"
         f"Riesgo por trade: {riskpertrade}% - RR: {rr}\n"
-        f"Balance inicial: {balanceinicial} USDT"
+        f"Balance inicial: {balanceinicial}:.0f USDT"
     )
     _send_async(msg)
