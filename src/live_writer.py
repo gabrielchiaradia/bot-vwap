@@ -113,6 +113,7 @@ def exportar_dashboard(client):
     except Exception as e:
         print(f"[DASHBOARD] Error consultando Binance: {e}")
         return # Si falla la API, no arriesgamos a cerrar trades por error
+    print(f"DEBUG: Símbolos encontrados en Binance: {list(active_map.keys())}")
 
     for t in all_trades:
         t_dash = t.copy()
@@ -171,7 +172,7 @@ def exportar_dashboard(client):
                 t_dash["pnl"] = 0.0
             
             open_trades.append(t_dash)
-            
+
     # 1. Si hubo cierres, actualizamos la "Base de Datos" (journal.json)
     if modified_journal:
         _save(all_trades)
