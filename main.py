@@ -1,166 +1,94 @@
 import time
-import uuid
-from datetime import datetime, timezone
-import pandas as pd
-
-from src.config import SYMBOL, BOT_ID, BAND_MULT, TP_RR_RATIO, RISK_PER_TRADE, BOT_NAME
+from src.config import SYMBOL, BOT_ID, BOT_NAME, TP_RR_RATIO, RISK_PER_TRADE, BAND_MULT
 from src.logger import logger
-from src.exchange import (
-    get_client, set_leverage, 
-    cancel_all_open_orders, place_limit_order, 
-    place_sl_tp, get_open_position, get_account_status, verificar_y_rescatar_sl_tp
-)
-from src.strategy import calculate_vwap_bands, get_vwap_signals
-from src.risk import can_trade, calculate_position_size, check_drawdown_alert
-from src.journal import record_open, record_close, _load
+from src.exchange import get_client, get_account_status, get_open_position, set_leverage
+from src.strategy import obtener_señal_actual
+from src.execution import ejecutar_apertura_completa, gestionar_resguardo_posicion
+from src.risk import calculate_position_size, check_drawdown_alert,can_trade
 from src.live_writer import exportar_dashboard, exportar_status
-from src.notifier import alert_trade_open, alert_trade_close, alert_error, alert_startup
+from src.notifier import alert_startup
+from src.journal import _load
+from src.execution import ejecutar_apertura_completa, gestionar_resguardo_posicion, sincronizar_realidad_vs_journal
 
-def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
+
+def inicializar():
+    """Configuración única al arrancar el contenedor."""
+    logger.info("="*50)
+    logger.info(f"🚀 Iniciando Bot {BOT_ID} para {SYMBOL}...")
+    logger.info("="*50)
+    client = get_client()
+    
+    # Configuración de Exchange inicial
+    set_leverage(client, SYMBOL)
+
+    # Notificación de arranque
+    balance_inicial = get_account_status(client)['wallet_balance']
+    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, balance_inicial)
+    
+    return client
+
+def ejecutar_ciclo(client, cycle_count): # Agregamos el cycle_count como parámetro
+    """Ciclo que se repite cada 1 minuto."""
     try:
+        logger.info(f"--- Ciclo {cycle_count} para {SYMBOL} ---")
+        # 1. Sincronización de Cuenta y Alertas de Riesgo
         account = get_account_status(client)
-        # Datos de la cuenta
-        balance = account['wallet_balance'] # Balance total
-        pnl = account['unrealized_pnl']
-        margin = account['margin_balance']
-        available = account['available']
+        check_drawdown_alert(account['wallet_balance'])
+        
+        # 2. AUDITORÍA: Sincronizar PnL real y detectar trades manuales
+        sincronizar_realidad_vs_journal(client, SYMBOL)
 
-        check_drawdown_alert(balance)
-        # Revisar posiciones abiertas para el dashboard
+        # 3. Gestión de Posición Abierta
         pos_abierta = get_open_position(client, SYMBOL)
-        open_count = 1 if pos_abierta else 0
+        if pos_abierta:
+            gestionar_resguardo_posicion(client, SYMBOL)
+        # Revisamos si el cortacircuitos diario nos permite operar
+        if not can_trade(_load()):
+            return  # Corta el ciclo acá y no analiza señales hasta mañana
 
-        # 2. Si hay posición, buscamos "quién es" ese trade en nuestro archivo
-        if open_count > 0:
-          
-            all_trades = _load()
-            
-            # Buscamos en la lista el trade que coincida con el símbolo y esté "OPEN"
-            current_trade = next((t for t in all_trades if t['symbol'] == SYMBOL and t['status'] == 'OPEN' and t.get('bot_id') == BOT_ID), None)
-            
-            if current_trade:
-                # RECIÉN ACÁ tenemos los datos para pasarle a la función
-                from src.exchange import verificar_y_rescatar_sl_tp
-                verificar_y_rescatar_sl_tp(client, SYMBOL, current_trade)
-            else:
-                logger.warning(f"[{SYMBOL}] Hay posición en Binance pero no encontré el trade en el Journal.")
+        # 4. Análisis de Estrategia
+        signal, entry_price, std_dev = obtener_señal_actual(client)
 
-        # Obtenemos datos 
-        candles = client.futures_klines(symbol=SYMBOL, interval='1m', limit=1500)
-        df = pd.DataFrame(candles, columns=['timestamp','open','high','low','close','volume','ct','qav','tr','tba','tqa','i'])
-        df['open_time'] = pd.to_datetime(df['timestamp'], unit='ms')
-        cols = ['open','high','low','close','volume']
-        df[cols] = df[cols].astype(float)
-        
-        # --- 1. ESTRATEGIA: Evaluar el mercado ---
-        df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
-        
-        # --- 2. Generar Señales ---
-        signal, entry_price, tp_price = get_vwap_signals(df_bands)
-        
-        # ACTUALIZAR DASHBOARD SIEMPRE AL FINALIZAR LECTURA
-
-        exportar_status(balance, cycle_count, pnl, margin, available, open_count)
+        # 5. Actualización del Dashboard Live
+        exportar_status(
+            account['wallet_balance'], cycle_count, 
+            account['unrealized_pnl'], account['margin_balance'], 
+            account['available'], 1 if pos_abierta else 0
+        )
         exportar_dashboard(client)
         
-        # -- 3. EJECUCIÓN: Si hay señal y no hay posición ---
-        if signal and open_count == 0:
-            print(f"[{datetime.now()}] ¡Señal {signal} detectada a {entry_price}!")
-            
-            # A. Calcular distancia base usando volatilidad pura (Desviación Estándar)
-            last_row = df_bands.iloc[-1]
-            dist_sl = last_row['std_dev'] * 1.5
-            
-            # B. Definir el precio del Stop Loss          
+        # 6. Lógica de Disparo
+        if signal and not pos_abierta:
+            dist_sl = std_dev * 1.5
             if signal == "LONG":
                 sl_price = entry_price - dist_sl
                 tp_price = entry_price + (dist_sl * TP_RR_RATIO)
-                side = "BUY"
             else:
                 sl_price = entry_price + dist_sl
                 tp_price = entry_price - (dist_sl * TP_RR_RATIO)
-                side = "SELL"
-           
-           # C. GESTIÓN DE RIESGO DINÁMICA
-            qty = calculate_position_size(
-                balance=balance,           # Balance total
-                risk_pct=RISK_PER_TRADE,   # Tu % del .env (ej: 3.0)
-                entry_price=entry_price,   # Precio de entrada
-                sl_price=sl_price          # Precio del SL calculado por tu estrategia
-            )
             
-            # D. Cargar ordenes
-            if qty > 0:
-                cancel_all_open_orders(client, SYMBOL)
-                
-                # 1. Poner orden de entrada
-                order = place_limit_order(client, SYMBOL, side, entry_price, qty)
-                
-                # 2. Si Binance la recibe ('NEW') o la ejecuta de una ('FILLED')...
-                if order and order.get('status') in ['NEW', 'FILLED']:
-                    trade_id = str(uuid.uuid4())[:8]
+            qty = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
 
-                    # --- NUEVA LÓGICA DE ESPERA ---
-                    import time
-                    max_retries = 10  # Esperamos hasta 10 segundos
-                    filled = False
-    
-                    logger.info(f"[{SYMBOL}] Orden LIMIT enviada. Esperando ejecución para colocar SL/TP...")
-    
-                    for _ in range(max_retries):
-                        # Consultamos la posición real en Binance
-                        pos_info = client.futures_position_information(symbol=SYMBOL)
-                        # Si la cantidad de la posición es distinta de cero, es que se llenó la LIMIT
-                        if any(float(p['positionAmt']) != 0 for p in pos_info if p['symbol'] == SYMBOL):
-                            filled = True
-                            break
-                        time.sleep(1) # Esperamos 1 segundo antes de reintentar
-    
-                    # 3. Solo si se llenó (FILLED), mandamos el SL/TP
-                    if filled:
-                        try:
-                            # ...clavamos el SL y TP en la exchange en ese mismo milisegundo ("y chau")
-                            place_sl_tp(client, SYMBOL, side, qty, sl_price, tp_price)
-                            logger.info(f"[{SYMBOL}] ✅ Posición detectada. SL/TP colocados.")
-                        except Exception as e:
-                            logger.error(f"Error tardío colocando SL/TP: {e}")
-                    else:
-                        logger.warning(f"[{SYMBOL}] ⚠️ La orden LIMIT sigue pendiente. El SL/TP se colocará en el próximo ciclo de monitoreo.")
-                    
-                    open_count = 1
-                    record_open(trade_id, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE)
-                    alert_trade_open(SYMBOL, signal, entry_price, sl_price, tp_price, RISK_PER_TRADE)
-                    
-                    # Forzar refresh del dashboard al abrir trade
-                    exportar_status(balance, cycle_count, pnl, margin, available, open_count)
-                    exportar_dashboard(client)
-                else:
-                    logger.warning(f"Orden rechazada o fallida. Estado: {order.get('status') if order else 'None'}")
-                    
+            if qty > 0:
+                ejecutar_apertura_completa(client, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE)
+
     except Exception as e:
-        logger.error(f"Error en ciclo {SYMBOL}: {e}")
-        alert_error(f"Ciclo {SYMBOL}", str(e))
-        logger.error(f"Error en ciclo {SYMBOL}: {e}")
-        alert_error(f"Ciclo {SYMBOL}", str(e))
+        logger.error(f"Error crítico en ciclo {SYMBOL}: {e}", exc_info=True)
 
 def main():
-    logger.info("="*50)
-    logger.info(f"  BOT {BOT_NAME} INICIADO")
-    logger.info(f"  Símbolo: {SYMBOL}")
-    client = get_client()
-    account = get_account_status(client)
-    balance = round(account['wallet_balance'] ,2)
-    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, balance )
-    set_leverage(client, SYMBOL)
-
+    # 1. Inicializamos y guardamos el cliente
+    client = inicializar()
+    
+    # 2. Arrancamos el loop infinito
     cycle_count = 0
     while True:
+        # Log informativo cada 60 ciclos (1 hora)
         if cycle_count % 60 == 0:
             logger.info("="*50)
             logger.info(f"  BOT {BOT_NAME}  R/R: {TP_RR_RATIO} Riesgo por trade: {RISK_PER_TRADE}%")
             logger.info(F"  Bot corriendo daunte {cycle_count} minutos")
             logger.info("="*50)
-        run_cycle(client, cycle_count)
+        ejecutar_ciclo(client, cycle_count)
         cycle_count += 1      
         time.sleep(60)  # Esperamos al cierre del minuto para recalcular bandas
 
