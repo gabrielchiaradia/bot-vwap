@@ -45,32 +45,15 @@ def _safe_write(path: str, data: dict | list):
     except Exception as e:
         logger.error(f"Error escribiendo JSON para Dashboard en {path}: {e}")
 
-# ── Helpers de compatibilidad ─────────────────────────────
-
-def _calc_duration(trade: dict) -> Optional[float]:
-    """Calcula la duración usando los campos del VWAP (entry_time y close_time)"""
-    try:
-        # Soporta open_time (Scalp) o entry_time (VWAP)
-        start_str = trade.get("open_time") or trade.get("entry_time") 
-        end_str = trade.get("close_time")
-        if not start_str or not end_str: 
-            return None
-        
-        opened = datetime.fromisoformat(start_str)
-        closed = datetime.fromisoformat(end_str)
-        return round((closed - opened).total_seconds() / 60, 1)
-    except Exception:
-        return None
-
 # ── Exportar estado del bot ───────────────────────────────
 
 def exportar_status(balance: float, cycle_count: int, pnl: float, margin: float,available: float, open_trades_count: int):
     """Estado general del bot formateado para el header del dashboard."""
     data = {
         "bot_name": BOT_NAME,
-        "symbols": [SYMBOL],  # El Dashboard espera una lista
-        "ltf": "1m",          # VWAP corre en 1m
-        "htf": "1m",          # Mock para que el dashboard no tire error
+        "symbols": [SYMBOL],  
+        "ltf": "1m",         
+        "htf": "1m",          
         "rr": TP_RR_RATIO,
         "risk_per_trade": RISK_PER_TRADE,
         "max_open_trades": 1, # VWAP abre 1 a la vez
@@ -88,7 +71,7 @@ def exportar_status(balance: float, cycle_count: int, pnl: float, margin: float,
 # ── Exportar listas de trades ─────────────────────────────
 
 def exportar_dashboard(client):
-    from datetime import datetime, timezone
+
     from src.journal import _load, _save
     
     all_trades = _load()
@@ -106,15 +89,13 @@ def exportar_dashboard(client):
         for p in actual_positions:
             amt = float(p['positionAmt'])
             if amt != 0:
-                # Guardamos la dirección real de Binance para comparar
-                side_real = "LONG" if amt > 0 else "SHORT"
                 active_map[p['symbol']] = {
-                    "side": side_real,
+                     "side": "LONG" if amt > 0 else "SHORT",
                     "pnl": float(p.get("unRealizedProfit", 0)),
                     "amt": amt
                 }
     except Exception as e:
-        print(f"[DASHBOARD] Error consultando Binance: {e}")
+        logger.error(f"[DASHBOARD] Error consultando Binance: {e}")
         return # Si falla la API, no arriesgamos a cerrar trades por error
 
     for t in all_trades:
@@ -122,44 +103,51 @@ def exportar_dashboard(client):
         symbol = t_dash["symbol"]
         side_bot = t_dash["direction"]
         
+        # Saltamos trades que no son de este Bot para el archivo individual
+        if t_dash.get("bot_id") != BOT_ID and t_dash.get("status") == "OPEN":
+            continue
+
         # BUSCAMOS LA POSICIÓN REAL EN EL MAPA
         real_pos = active_map.get(symbol)
         
-       # LÓGICA DE CIERRE MEJORADA:
-        # Si el journal dice OPEN pero:
-        # 1. No hay nada en Binance para ese símbolo OR
-        # 2. Hay algo en Binance pero es de la dirección OPUESTA (ej: Bot dice LONG y hay un SHORT)
+        # --- LÓGICA DE SINCRONIZACIÓN PROTEGIDA ---
         if t_dash.get("status") == "OPEN":
             debe_cerrar = False
-            if not real_pos:
+
+            # Solo cerramos automáticamente si hay una posición OPUESTA (indica cierre y vuelta)
+            if real_pos and real_pos["side"] != side_bot:
                 debe_cerrar = True
-                print(f"✅ Sincronizando cierre de {symbol}...")
-            elif real_pos["side"] != side_bot:
-                debe_cerrar = True
-                print(f"✅ Sincronizando cierre de {symbol}...")
-                
+                logger.warning(f"🔄 Detectada dirección opuesta en {symbol}. Sincronizando...")
+
+            # Si NO hay posición en Binance, no cerramos de inmediato (evita errores de API)
+            # El bot solo marcará como CLOSED si el ciclo de trading principal (main.py) lo decide   
             if debe_cerrar:
-                print(f"🧹 Limpiando trade desincronizado: {symbol} {side_bot} (ID: {t_dash['trade_id']})")
+                logger.warning(f"🧹 Limpiando trade desincronizado: {symbol} {side_bot} (ID: {t_dash['trade_id']})")
                 t_dash["status"] = "CLOSED"
                 t_dash["close_time"] = ahora
+                # Intentamos rescatar el último PnL cerrado
+                try:
+                    trades = client.futures_account_trades(symbol=symbol, limit=1)
+                    if trades:
+                        t_dash["pnl_usdt"] = float(trades[0].get("realizedPnl", 0))
+                        t_dash["exit_price"] = float(trades[0].get("price", 0))
+                except: pass
+                
                 t["status"] = "CLOSED"
                 t["close_time"] = ahora
+                t["pnl_usdt"] = t_dash.get("pnl_usdt", 0)
+                t["exit_price"] = t_dash.get("exit_price")
                 modified_journal = True
                 
-       # Clasificación para los archivos del Frontend
+        # --- PREPARACIÓN PARA FRONTEND ---
         if t_dash.get("status") == "CLOSED":
-            # Para los cerrados, también mapeamos nombres por si el front los usa
             t_dash["pnl"] = t_dash.get("pnl_usdt", 0)
             t_dash["entry"] = t_dash.get("entry_price")
             t_dash["exit"] = t_dash.get("exit_price")
             closed_trades.append(t_dash)
         else:
-            # CASO B: El trade sigue OPEN, actualizamos su PnL y nombres para el front
-            if real_pos:
-                # 1. El PnL que tu HTML espera (data-key="pnl")
-                t_dash["pnl"] = round(real_pos["pnl"], 2)
-                
-                # 2. Mapeo de nombres cortos para las columnas del Dashboard
+                # Mapeo de campos que el Dashboard espera ver
+                t_dash["pnl"] = round(real_pos["pnl"], 2) if real_pos else 0.0
                 t_dash["entry"] = t_dash.get("entry_price")
                 t_dash["sl"] = t_dash.get("sl_price")
                 t_dash["tp"] = t_dash.get("tp_price")
@@ -170,12 +158,12 @@ def exportar_dashboard(client):
                 qty = float(t_dash.get("quantity", 0))
                 price = float(t_dash.get("entry_price", 0))
                 t_dash["capital"] = round(qty * price, 2)
-            else:
+            
                 t_dash["pnl"] = 0.0
             
-            open_trades.append(t_dash)
+                open_trades.append(t_dash)
 
-    # 1. Si hubo cierres, actualizamos la "Base de Datos" (journal.json)
+    # Si hubo cierres, actualizamos la "Base de Datos" (journal.json)
     if modified_journal:
         _save(all_trades)
         logger.info(f"✅ Sincronización completa: {len(all_trades)} trades en el journal.")
@@ -184,22 +172,17 @@ def exportar_dashboard(client):
     _safe_write(_positions_path(), open_trades)  # Va a positions.json
     _safe_write(_dashboard_path(), closed_trades) # Va a dashboard.json
 
+    # --- UNIFICACIÓN SIN PISARSE ---
     ruta_total = _all_positions_path()
     datos_finales = []
-
-    # Intentamos leer lo que ya escribieron otros bots
     if os.path.exists(ruta_total):
         try:
             with open(ruta_total, 'r') as f:
-                datos_existentes = json.load(f)
-                # Filtramos: Nos quedamos con todo lo que NO sea de ESTE bot
-                # (Así limpiamos lo viejo de BTC antes de poner lo nuevo de BTC)
-                datos_finales = [t for t in datos_existentes if t.get("bot_id") != BOT_ID]
-        except Exception:
-            datos_finales = []
-
-    # Sumamos nuestros trades actuales a los que ya había de otros bots
+                existentes = json.load(f)
+                # Mantenemos todo lo que NO sea de este Bot
+                datos_finales = [x for x in existentes if x.get("bot_id") != BOT_ID]
+        except: pass
+    
+    # Agregamos nuestras posiciones actuales (si las hay)
     datos_finales.extend(open_trades)
-
-    # Guardamos la unión de ambos
     _safe_write(ruta_total, datos_finales)
