@@ -143,15 +143,35 @@ def exportar_dashboard(client):
                 t["close_time"] = ahora
                 modified_journal = True
                 
-        # Clasificación para los archivos del Frontend
+       # Clasificación para los archivos del Frontend
         if t_dash.get("status") == "CLOSED":
+            # Para los cerrados, también mapeamos nombres por si el front los usa
+            t_dash["pnl"] = t_dash.get("pnl_usdt", 0)
+            t_dash["entry"] = t_dash.get("entry_price")
+            t_dash["exit"] = t_dash.get("exit_price")
             closed_trades.append(t_dash)
         else:
-            # CASO B: El trade sigue OPEN, actualizamos su PnL en vivo para el front
+            # CASO B: El trade sigue OPEN, actualizamos su PnL y nombres para el front
             if real_pos:
-                t_dash["unrealized_pnl"] = real_pos["pnl"]
+                # 1. El PnL que tu HTML espera (data-key="pnl")
+                t_dash["pnl"] = round(real_pos["pnl"], 2)
+                
+                # 2. Mapeo de nombres cortos para las columnas del Dashboard
+                t_dash["entry"] = t_dash.get("entry_price")
+                t_dash["sl"] = t_dash.get("sl_price")
+                t_dash["tp"] = t_dash.get("tp_price")
+                t_dash["time"] = t_dash.get("entry_time")
+                t_dash["bot"] = t_dash.get("bot_id")
+                
+                # 3. Cálculo de Capital (Cantidad * Precio Entrada)
+                qty = float(t_dash.get("quantity", 0))
+                price = float(t_dash.get("entry_price", 0))
+                t_dash["capital"] = round(qty * price, 2)
+            else:
+                t_dash["pnl"] = 0.0
+            
             open_trades.append(t_dash)
-
+            
     # 1. Si hubo cierres, actualizamos la "Base de Datos" (journal.json)
     if modified_journal:
         _save(all_trades)
