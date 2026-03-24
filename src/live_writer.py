@@ -183,9 +183,23 @@ def exportar_dashboard(client):
     # 2. Exportamos las vistas filtradas para JavaScript
     _safe_write(_positions_path(), open_trades)  # Va a positions.json
     _safe_write(_dashboard_path(), closed_trades) # Va a dashboard.json
-    
-    # Filtrando solo los que estén realmente OPEN en ese momento
-    all_open_any_bot = [t for t in all_trades if t.get("status") == "OPEN"]
-    # Este archivo se llamará siempre igual para todos los bots
-    # Asegurate de definir esta ruta (ej: "data/positions_all.json")
-    _safe_write(_all_positions_path(), all_open_any_bot)
+
+    ruta_total = _all_positions_path()
+    datos_finales = []
+
+    # Intentamos leer lo que ya escribieron otros bots
+    if os.path.exists(ruta_total):
+        try:
+            with open(ruta_total, 'r') as f:
+                datos_existentes = json.load(f)
+                # Filtramos: Nos quedamos con todo lo que NO sea de ESTE bot
+                # (Así limpiamos lo viejo de BTC antes de poner lo nuevo de BTC)
+                datos_finales = [t for t in datos_existentes if t.get("bot_id") != BOT_ID]
+        except Exception:
+            datos_finales = []
+
+    # Sumamos nuestros trades actuales a los que ya había de otros bots
+    datos_finales.extend(open_trades)
+
+    # Guardamos la unión de ambos
+    _safe_write(ruta_total, datos_finales)
