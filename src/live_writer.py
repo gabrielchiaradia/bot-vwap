@@ -107,13 +107,12 @@ def exportar_dashboard(client):
                 side_real = "LONG" if amt > 0 else "SHORT"
                 active_map[p['symbol']] = {
                     "side": side_real,
-                    "pnl": float(p.get("unrealizedProfit", 0)),
+                    "pnl": float(p.get("unRealizedProfit", 0)),
                     "amt": amt
                 }
     except Exception as e:
         print(f"[DASHBOARD] Error consultando Binance: {e}")
         return # Si falla la API, no arriesgamos a cerrar trades por error
-    print(f"DEBUG: Símbolos encontrados en Binance: {list(active_map.keys())}")
 
     for t in all_trades:
         t_dash = t.copy()
