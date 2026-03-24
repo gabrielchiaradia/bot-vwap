@@ -91,10 +91,47 @@ def place_limit_order(client, symbol, side, price, quantity):
         logger.error(f"❌ Error colocando LIMIT: {e}")
         return None
 
-
+def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
+    """
+    Verifica si una posición abierta tiene sus órdenes de protección (SL/TP).
+    Si faltan, las coloca usando los datos del trade guardado.
+    """
+    try:
+        # 1. Obtener órdenes abiertas de Binance
+        open_orders = client.futures_get_open_orders(symbol=symbol)
+        
+        # 2. Filtramos SL y TP (STOP_MARKET, TAKE_PROFIT_MARKET, etc.)
+        exit_orders = [o for o in open_orders if o['type'] in ['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'TAKE_PROFIT']]
+        
+        if len(exit_orders) < 2:
+            logger.warning(f"[{symbol}] Protección incompleta ({len(exit_orders)}/2). Rescatando...")
+            
+            # Mapeo de dirección
+            side_bot = current_trade.get('direction') or current_trade.get('side')
+            side_entry = "BUY" if side_bot == "LONG" else "SELL"
+            
+            qty = float(current_trade['quantity'])
+            sl = float(current_trade['sl_price'])
+            tp = float(current_trade['tp_price'])
+            
+            # LLAMADA DIRECTA (Sin import)
+            place_sl_tp(client, symbol, side_entry, qty, sl, tp)
+            
+            logger.info(f"[{symbol}] ✅ Órdenes de protección re-sincronizadas.")
+            return True
+            
+        return False 
+    except Exception as e:
+        logger.error(f"Error en verificar_y_rescatar_sl_tp: {e}")
+        return False
+    
 def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
     """Coloca las órdenes de protección una vez entramos al trade"""
     try:
+        # --- LIMPIEZA PREVIA PARA EVITAR DUPLICADOS ---
+        # Esto borra órdenes LIMIT/STOP previas del símbolo para que no se pisen
+        client.futures_cancel_all_open_orders(symbol=symbol)
+        
         # El lado de cierre es el opuesto al de entrada
         close_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
         sl_price = round(float(sl_price), 2)

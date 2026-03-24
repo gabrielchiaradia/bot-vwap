@@ -8,7 +8,7 @@ from src.logger import logger
 from src.exchange import (
     get_client, set_leverage, 
     cancel_all_open_orders, place_limit_order, 
-    place_sl_tp, get_open_position, get_account_status
+    place_sl_tp, get_open_position, get_account_status, verificar_y_rescatar_sl_tp
 )
 from src.strategy import calculate_vwap_bands, get_vwap_signals
 from src.risk import can_trade, calculate_position_size, check_drawdown_alert
@@ -29,6 +29,22 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
         # Revisar posiciones abiertas para el dashboard
         pos_abierta = get_open_position(client, SYMBOL)
         open_count = 1 if pos_abierta else 0
+
+        # 2. Si hay posición, buscamos "quién es" ese trade en nuestro archivo
+        if open_count > 0:
+          
+            all_trades = _load()
+            
+            # Buscamos en la lista el trade que coincida con el símbolo y esté "OPEN"
+            current_trade = next((t for t in all_trades if t['symbol'] == SYMBOL and t['status'] == 'OPEN' and t.get('bot_id') == BOT_ID), None)
+            
+            if current_trade:
+                # RECIÉN ACÁ tenemos los datos para pasarle a la función
+                from src.exchange import verificar_y_rescatar_sl_tp
+                verificar_y_rescatar_sl_tp(client, SYMBOL, current_trade)
+            else:
+                logger.warning(f"[{SYMBOL}] Hay posición en Binance pero no encontré el trade en el Journal.")
+
         # Obtenemos datos 
         candles = client.futures_klines(symbol=SYMBOL, interval='1m', limit=1500)
         df = pd.DataFrame(candles, columns=['timestamp','open','high','low','close','volume','ct','qav','tr','tba','tqa','i'])
@@ -83,14 +99,41 @@ def run_cycle(client, cycle_count): # Agregamos el cycle_count como parámetro
                 # 2. Si Binance la recibe ('NEW') o la ejecuta de una ('FILLED')...
                 if order and order.get('status') in ['NEW', 'FILLED']:
                     trade_id = str(uuid.uuid4())[:8]
-                    # ...clavamos el SL y TP en la exchange en ese mismo milisegundo ("y chau")
-                    place_sl_tp(client, SYMBOL, side, qty, sl_price, tp_price)
+
+                    # --- NUEVA LÓGICA DE ESPERA ---
+                    import time
+                    max_retries = 10  # Esperamos hasta 10 segundos
+                    filled = False
+    
+                    logger.info(f"[{SYMBOL}] Orden LIMIT enviada. Esperando ejecución para colocar SL/TP...")
+    
+                    for _ in range(max_retries):
+                        # Consultamos la posición real en Binance
+                        pos_info = client.futures_position_information(symbol=SYMBOL)
+                        # Si la cantidad de la posición es distinta de cero, es que se llenó la LIMIT
+                        if any(float(p['positionAmt']) != 0 for p in pos_info if p['symbol'] == SYMBOL):
+                            filled = True
+                            break
+                        time.sleep(1) # Esperamos 1 segundo antes de reintentar
+    
+                    # 3. Solo si se llenó (FILLED), mandamos el SL/TP
+                    if filled:
+                        try:
+                            # ...clavamos el SL y TP en la exchange en ese mismo milisegundo ("y chau")
+                            place_sl_tp(client, SYMBOL, side, qty, sl_price, tp_price)
+                            logger.info(f"[{SYMBOL}] ✅ Posición detectada. SL/TP colocados.")
+                        except Exception as e:
+                            logger.error(f"Error tardío colocando SL/TP: {e}")
+                    else:
+                        logger.warning(f"[{SYMBOL}] ⚠️ La orden LIMIT sigue pendiente. El SL/TP se colocará en el próximo ciclo de monitoreo.")
+                    
+                    open_count = 1
                     record_open(trade_id, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE)
                     alert_trade_open(SYMBOL, signal, entry_price, sl_price, tp_price, RISK_PER_TRADE)
                     
                     # Forzar refresh del dashboard al abrir trade
-                    exportar_status(balance, cycle_count, pnl, available, open_count)
-                    exportar_dashboard()
+                    exportar_status(balance, cycle_count, pnl, margin, available, open_count)
+                    exportar_dashboard(client)
                 else:
                     logger.warning(f"Orden rechazada o fallida. Estado: {order.get('status') if order else 'None'}")
                     
