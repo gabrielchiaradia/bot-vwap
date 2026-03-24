@@ -30,8 +30,13 @@ def gestionar_resguardo_posicion(client, symbol):
                               and t.get('bot_id') == BOT_ID), None)
         
         if current_trade:
-            # Si lo encontramos, le pasamos la pelota a tu función de rescate original
-            verificar_y_rescatar_sl_tp(client, symbol, current_trade)
+           # Si el trade se abrió a mano, no intentamos ponerle SL/TP automáticos
+            # porque los valores están en 0.0. Simplemente lo dejamos ser.
+            if current_trade.get('bot_id') == "MANUAL":
+                pass 
+            else:
+                # Si lo encontramos, le pasamos la pelota a tu función de rescate original
+                verificar_y_rescatar_sl_tp(client, symbol, current_trade)
         else:
             logger.warning(f"[{symbol}] Hay posición en Binance pero no encontré el trade OPEN en el Journal.")
             
