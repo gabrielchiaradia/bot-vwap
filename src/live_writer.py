@@ -3,9 +3,9 @@ import json
 import os
 import threading
 from datetime import datetime, timezone
-
 from src.config import BOT_ID, BOT_NAME, SYMBOL, TP_RR_RATIO, RISK_PER_TRADE, JOURNAL_FILE, BAND_MULT
 from src.logger import logger
+from src.journal import _load
 
 _lock = threading.Lock()
 LOG_DIR = os.path.abspath(os.path.dirname(JOURNAL_FILE) or "logs")
@@ -36,7 +36,6 @@ def _safe_write(path: str, data):
 
 # ── Exportar listas de trades ─────────────────────────────
 def exportar_dashboard(client):
-    from src.journal import _load
     from src.exchange import get_account_status
     
     all_trades = _load()
@@ -107,11 +106,11 @@ def exportar_dashboard(client):
     profit_factor = round((gross_profit / gross_loss), 2) if gross_loss > 0 else round(gross_profit, 2)
     
     dashboard_data = {
-        "summaries": [{
+        "summary": {
             "label": f"LIVE_{BOT_ID}",
             "symbol": SYMBOL,
-            "ltf": "1m",
-            "htf": "1m",
+            "timeframe": "1m",
+            "bot": BOT_NAME,
             "band_mult": BAND_MULT,
             "rr": TP_RR_RATIO,
             "risk_pct": RISK_PER_TRADE,
@@ -120,14 +119,17 @@ def exportar_dashboard(client):
             "losses": losses,
             "winrate": winrate,
             "profit_factor": profit_factor,
-            "pnl_total": round(pnl_total, 2),
-            "capital_final": round(current_balance, 2),
+            "pnl_total": round(pnl_neto_total, 2),
             "pnl_bruto": round(pnl_bruto_total, 2),
             "fees_totales": round(fees_totales, 2),
-            "pnl_total": round(pnl_neto_total, 2),
-            "trades": formatted_closed
-        }]
+            "capital_final": round(current_balance, 2),
+            "balance_actual": round(current_balance, 2),
+            "retorno_pct": round((current_balance - (current_balance - pnl_neto_total)) / max(current_balance - pnl_neto_total, 1) * 100, 2),
+            "max_drawdown": 0,
+        },
+        "trades": formatted_closed
     }
+
     _safe_write(_dashboard_path(), dashboard_data)
 
     # ==========================================
