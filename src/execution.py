@@ -56,7 +56,7 @@ def gestionar_resguardo_posicion(client, symbol):
             
     except Exception as e:
         logger.error(f"Error en gestionar_resguardo_posicion para {symbol}: {e}")
-        
+
 def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct):
     """
     Orquesta la apertura: Cancela previas, pone LIMIT, espera FILL y clava SL/TP.
@@ -122,36 +122,46 @@ def sincronizar_realidad_vs_journal(client, symbol):
         modified = False
         ahora = datetime.now(timezone.utc).isoformat()
 
+        # --- FUNCIÓN INTERNA PARA NO REPETIR LÓGICA DE PNL/FEES ---
+        def calcular_pnl_y_fees_final(trade):
+            try:
+                # Usamos el tiempo de entrada para buscar en Binance
+                entry_dt = datetime.fromisoformat(trade['entry_time'])
+                entry_ts = int(entry_dt.timestamp() * 1000)
+                
+                # Traemos el historial desde que se abrió la posición
+                historial = client.futures_account_trades(symbol=symbol, startTime=entry_ts)
+                
+                pnl_acumulado = 0.0
+                fees_acumulados = 0.0
+                ultimo_precio = trade.get('entry_price', 0)
+
+                for op in historial:
+                    realizado = float(op.get('realizedPnl', 0))
+                    comm = float(op.get('commission', 0))
+                    if realizado != 0 or comm != 0:
+                        pnl_acumulado += realizado
+                        fees_acumulados += comm
+                        ultimo_precio = float(op.get('price', 0))
+
+                trade['pnl_bruto'] = round(pnl_acumulado, 4)
+                trade['fees'] = round(fees_acumulados, 4)
+                trade['pnl_usdt'] = round(pnl_acumulado - fees_acumulados, 4) # El NETO
+                trade['exit_price'] = ultimo_precio
+                logger.info(f"[{symbol}] Calculado: Bruto {trade['pnl_bruto']} | Fees {trade['fees']} | Neto {trade['pnl_usdt']}")
+            except Exception as e:
+                logger.error(f"Error calculando PnL/Fees: {e}")
+
+
         # ==========================================
         # CASO 1: SE CERRÓ (SL, TP o lo cerraste a mano)
         # ==========================================
         if not pos_real and open_in_journal:
             for t in open_in_journal:
-                logger.info(f"[{symbol}] Detectado cierre externo. Buscando PnL real en Binance...")
+                logger.info(f"[{symbol}] Detectado cierre externo.")
                 t['status'] = 'CLOSED'
                 t['close_time'] = ahora
-                
-                # Vamos a buscar a Binance cuánta plata ganaste/perdiste realmente
-                try:
-                    # Traemos los últimos 5 trades de la cuenta para ese símbolo
-                    historial = client.futures_account_trades(symbol=symbol, limit=5)
-                    pnl_real = 0.0
-                    precio_salida = 0.0
-                    
-                    # Sumamos el PnL de las órdenes que cerraron esta posición
-                    for operacion in reversed(historial):
-                        pnl_op = float(operacion.get('realizedPnl', 0))
-                        if pnl_op != 0:
-                            pnl_real += pnl_op
-                            precio_salida = float(operacion.get('price', 0))
-                            
-                    t['pnl_usdt'] = round(pnl_real, 2)
-                    t['exit_price'] = precio_salida if precio_salida > 0 else t.get('entry_price')
-                    logger.info(f"[{symbol}] Trade cerrado en journal. PnL Real: {t['pnl_usdt']} USDT")
-                except Exception as e:
-                    logger.error(f"Error buscando PnL en Binance: {e}")
-                    t['pnl_usdt'] = 0.0
-                    
+                calcular_pnl_y_fees_final(t) # <--- LLAMADA A LA LÓGICA NUEVA
                 modified = True
 
         # ==========================================
@@ -184,10 +194,10 @@ def sincronizar_realidad_vs_journal(client, symbol):
         elif pos_real and open_in_journal:
             t = open_in_journal[0]
             if t['direction'] != pos_real['side']:
-                logger.warning(f"[{symbol}] Cambio de dirección manual detectado. Cerrando anterior...")
+                logger.warning(f"[{symbol}] Cambio de dirección manual detectado.")
                 t['status'] = 'CLOSED'
                 t['close_time'] = ahora
-                # Acá podrías repetir la lógica de buscar el PnL si querés
+                calcular_pnl_y_fees_final(t) # <--- TAMBIÉN CALCULAMOS ACÁ
                 modified = True
 
         if modified:

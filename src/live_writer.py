@@ -45,6 +45,11 @@ def exportar_dashboard(client):
     closed_trades = [t for t in all_trades if t.get('status') == 'CLOSED' and t.get('bot_id') in [BOT_ID, "MANUAL"]]
     open_trades_journal = [t for t in all_trades if t.get('status') == 'OPEN' and t.get('bot_id') in [BOT_ID, "MANUAL"]]
 
+    total_trades = len(closed_trades)
+    pnl_neto_total = sum(t.get('pnl_usdt', 0) for t in closed_trades)
+    fees_totales = sum(t.get('fees', 0) for t in closed_trades)
+    pnl_bruto_total = sum(t.get('pnl_bruto', 0) for t in closed_trades)
+
     # ==========================================
     # LÓGICA 1: TRADES CERRADOS (Formato Backtest)
     # ==========================================
@@ -117,6 +122,9 @@ def exportar_dashboard(client):
             "profit_factor": profit_factor,
             "pnl_total": round(pnl_total, 2),
             "capital_final": round(current_balance, 2),
+            "pnl_bruto": round(pnl_bruto_total, 2),
+            "fees_totales": round(fees_totales, 2),
+            "pnl_total": round(pnl_neto_total, 2),
             "trades": formatted_closed
         }]
     }
