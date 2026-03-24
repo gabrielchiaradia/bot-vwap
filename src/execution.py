@@ -125,30 +125,57 @@ def sincronizar_realidad_vs_journal(client, symbol):
         # --- FUNCIÓN INTERNA PARA NO REPETIR LÓGICA DE PNL/FEES ---
         def calcular_pnl_y_fees_final(trade):
             try:
-                # Usamos el tiempo de entrada para buscar en Binance
                 entry_dt = datetime.fromisoformat(trade['entry_time'])
                 entry_ts = int(entry_dt.timestamp() * 1000)
-                
-                # Traemos el historial desde que se abrió la posición
-                historial = client.futures_account_trades(symbol=symbol, startTime=entry_ts)
-                
+        
+                # Traer historial desde la apertura
+                historial = client.futures_account_trades(
+                    symbol=symbol, 
+                    startTime=entry_ts,
+                    limit=100
+                )
+        
+                if not historial:
+                    logger.warning(f"[{symbol}] Sin historial de trades en Binance")
+                    return
+        
+                # Filtrar solo los trades de ESTA posición:
+                # Los que tienen el mismo side que la apertura (entry)
+                # y los que tienen side contrario (cierre)
+                entry_side = "BUY" if trade['direction'] == "LONG" else "SELL"
+                close_side = "SELL" if trade['direction'] == "LONG" else "BUY"
+        
                 pnl_acumulado = 0.0
                 fees_acumulados = 0.0
                 ultimo_precio = trade.get('entry_price', 0)
-
+                qty_entrada = float(trade.get('quantity', 0))
+        
                 for op in historial:
                     realizado = float(op.get('realizedPnl', 0))
                     comm = float(op.get('commission', 0))
-                    if realizado != 0 or comm != 0:
+                    op_side = op.get('side', '')
+                    op_qty = float(op.get('qty', 0))
+            
+                    # Siempre sumar fees (tanto apertura como cierre)
+                    fees_acumulados += comm
+            
+                    # Solo sumar PnL de operaciones de cierre
+                    if realizado != 0:
                         pnl_acumulado += realizado
-                        fees_acumulados += comm
                         ultimo_precio = float(op.get('price', 0))
-
+        
                 trade['pnl_bruto'] = round(pnl_acumulado, 4)
                 trade['fees'] = round(fees_acumulados, 4)
-                trade['pnl_usdt'] = round(pnl_acumulado - fees_acumulados, 4) # El NETO
+                trade['pnl_usdt'] = round(pnl_acumulado - fees_acumulados, 4)
                 trade['exit_price'] = ultimo_precio
-                logger.info(f"[{symbol}] Calculado: Bruto {trade['pnl_bruto']} | Fees {trade['fees']} | Neto {trade['pnl_usdt']}")
+        
+                logger.info(
+                    f"[{symbol}] PnL final: "
+                    f"Bruto={trade['pnl_bruto']} "
+                    f"Fees={trade['fees']} "
+                    f"Neto={trade['pnl_usdt']} "
+                    f"Exit={ultimo_precio}"
+                )
             except Exception as e:
                 logger.error(f"Error calculando PnL/Fees: {e}")
 
