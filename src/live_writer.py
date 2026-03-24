@@ -29,6 +29,9 @@ def _dashboard_path() -> str:
 def _positions_path() -> str:
     return os.path.join(LOG_DIR, f"open_positions_{BOT_ID}.json")
 
+def _all_positions_path() -> str:
+    return os.path.join(LOG_DIR, f"open_positions_total.json")
+
 def _status_path() -> str:
     return os.path.join(LOG_DIR, f"bot_status_{BOT_ID}.json")
 
@@ -180,3 +183,9 @@ def exportar_dashboard(client):
     # 2. Exportamos las vistas filtradas para JavaScript
     _safe_write(_positions_path(), open_trades)  # Va a positions.json
     _safe_write(_dashboard_path(), closed_trades) # Va a dashboard.json
+    
+    # Filtrando solo los que estén realmente OPEN en ese momento
+    all_open_any_bot = [t for t in all_trades if t.get("status") == "OPEN"]
+    # Este archivo se llamará siempre igual para todos los bots
+    # Asegurate de definir esta ruta (ej: "data/positions_all.json")
+    _safe_write(_all_positions_path(), all_open_any_bot)

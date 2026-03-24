@@ -571,7 +571,7 @@ async function fetchLiveData() {
     const [trRes, posRes, stRes] = await Promise.allSettled([
       // Acá ya toma el valor nuevo ('ETH' o 'BTC') automáticamente
       fetch(`/data/dashboard_trades_${botActivo}.json?t=` + Date.now()),
-      fetch(`/data/open_positions_${botActivo}.json?t=` + Date.now()),
+      fetch(`/data/open_positions_total.json?t=` + Date.now()),
       fetch(`/data/bot_status_${botActivo}.json?t=` + Date.now()),
     ]);
 
