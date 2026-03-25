@@ -13,7 +13,7 @@
 #    docker compose down           # Detener
 #    docker compose pull && docker compose up -d  # Actualizar
 # ══════════════════════════════════════════════════════════
-version: '3.8'
+
 
 services:
   # ── Bot ETH ────────────────────────────────────────────
