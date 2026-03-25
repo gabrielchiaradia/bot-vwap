@@ -57,7 +57,7 @@ def gestionar_resguardo_posicion(client, symbol):
     except Exception as e:
         logger.error(f"Error en gestionar_resguardo_posicion para {symbol}: {e}")
 
-def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct):
+def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open: float = 0.0):
     """
     Orquesta la apertura: Cancela previas, pone LIMIT, espera FILL y clava SL/TP.
     """
@@ -97,7 +97,7 @@ def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp
             logger.warning(f"[{symbol}] ⚠️ LIMIT no se llenó en 10s. El SL/TP se colocará en el próximo ciclo de monitoreo.")
 
         # 5. Registro y Notificación
-        record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
+        record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open)
         crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
         
         return True
@@ -196,7 +196,8 @@ def sincronizar_realidad_vs_journal(client, symbol):
                     result=resultado,
                     qty=float(trade.get('quantity', 0)),
                     entry_price=float(trade.get('entry_price', 0)),
-                    exit_price=ultimo_precio
+                    exit_price=ultimo_precio,
+                    balance_at_open=float(trade.get('balance_at_open', 0.0))
                 )
                 # ==========================================
             except Exception as e:

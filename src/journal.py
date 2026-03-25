@@ -20,7 +20,7 @@ def _save(trades: list):
     with open(JOURNAL_FILE, "w", encoding="utf-8") as f:
         json.dump(trades, f, indent=2, ensure_ascii=False)
 
-def record_open(trade_id, symbol, direction, entry_price, sl_price, tp_price, quantity, risk_pct):
+def record_open(trade_id, symbol, direction, entry_price, sl_price, tp_price, quantity, risk_pct, balance_at_open: float = 0.0):
     trades = _load()
     nuevo_trade = {
         "trade_id": trade_id,
@@ -33,6 +33,7 @@ def record_open(trade_id, symbol, direction, entry_price, sl_price, tp_price, qu
         "tp_price": tp_price,
         "quantity": quantity,
         "risk_pct": risk_pct,
+        "balance_at_open": balance_at_open,
         "status": "OPEN",
         "result": None,
         "exit_price": None,

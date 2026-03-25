@@ -99,11 +99,13 @@ def ejecutar_ciclo_ws(df_velas, buffer):
             max_notional = account['available'] * LEVERAGE * 0.8
             if notional > max_notional:
                 qty_capped = round(max_notional / entry_price, 3)
-                logger.warning(f"[{SYMBOL}] Qty capado por margen: {qty:.4f} â†’ {qty_capped:.4f} (notional {notional:.0f} â†’ {max_notional:.0f})")
+                logger.warning(f"[{SYMBOL}] Qty capado por margen: {qty:.4f} â†?{qty_capped:.4f} (notional {notional:.0f} â†?{max_notional:.0f})")
                 qty = qty_capped
 
             if qty > 0:
-                ejecutar_apertura_completa(client, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE)
+                ejecutar_apertura_completa(client, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE
+                balance_at_open=account['wallet_balance']   # ¡û agregar esto
+                )
         # ==========================================
         # REPORTE DE ESTADO (Delega todo al notifier)
         # ==========================================

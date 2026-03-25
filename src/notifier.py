@@ -62,7 +62,7 @@ class TelegramNotifier:
         )
         self._send_async(msg)
 
-    def alert_trade_close(self, symbol, pnl, result, qty, entry_price, exit_price):
+    def alert_trade_close(self, symbol, pnl, result, qty, entry_price, exit_price, balance_at_open: float = 0.0):
         if result == "WIN":
             emoji, title = "✅", "POSICIÓN CERRADA (PROFIT)"
         elif result == "BREAKEVEN":
@@ -71,7 +71,7 @@ class TelegramNotifier:
             emoji, title = "🏁", "POSICIÓN CERRADA (LOSS)"
             
         pnl_emoji = "💵" if pnl > 0 else "💸"
-        pnl_perc = (pnl / (entry_price * qty)) * 100 if entry_price and qty else 0
+        pnl_perc = (pnl / balance_at_open) * 100 if balance_at_open > 0 else 0
 
         msg = self._tag(
             f"{emoji} <b>{title}</b>\n"
@@ -82,7 +82,7 @@ class TelegramNotifier:
             f"🛫 <b>In:</b> <code>{entry_price:.2f}</code>\n"
             f"🛬 <b>Out:</b> <code>{exit_price:.2f}</code>\n"
             f"{pnl_emoji} <b>PnL Neto:</b> <code>{pnl:+.2f} USDT</code>\n"
-            f"📈 <b>Rendimiento:</b> <code>{pnl_perc:+.2f}%</code>\n"
+            f"📈 <b>Rendimiento:</b> <code>{pnl_perc:+.2f}%</code> <i>sobre balance al abrir</i>\n"
             f"───────────────────\n"
             f"✅ <i>Libro de órdenes actualizado.</i>"
         )
