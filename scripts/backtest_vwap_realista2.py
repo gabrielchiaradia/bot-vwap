@@ -407,7 +407,7 @@ def main():
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
                   f"PnL ={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
-                  f"DD={s['max_drawdown']}%{K.X}"
+                  f"DD={s['max_drawdown']}%{K.X} "
                   f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")    
         ranked = sorted(all_summaries, key=lambda x: x["pnl_total"], reverse=True)
@@ -422,7 +422,7 @@ def main():
                   f"Band={s['band_mult']}{K.X} "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL ={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
+                  f"PnL={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
                   f"DD={s['max_drawdown']}%{K.X} "
                   f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")
