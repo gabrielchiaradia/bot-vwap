@@ -421,7 +421,7 @@ def main():
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
                   f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
-                  f"DD={s['max_drawdown']}%"
+                  f"DD={s['max_drawdown']}%{K.X} "
                   f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")
 
