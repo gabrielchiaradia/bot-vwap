@@ -1,7 +1,7 @@
 import time
 from src.config import SYMBOL, BOT_ID, BOT_NAME, TP_RR_RATIO, RISK_PER_TRADE, BAND_MULT
 # Asegurate de tener TIMEFRAME o INTERVALO en tu config (ej: "1m")
-from src.config import TIMEFRAME 
+from src.config import TIMEFRAME , LEVERAGE
 from src.logger import logger
 from src.exchange import get_client, get_account_status, get_open_position, set_leverage
 from src.strategy import obtener_señal_actual
@@ -93,6 +93,14 @@ def ejecutar_ciclo_ws(df_velas, buffer):
                 tp_price = entry_price - (dist_sl * TP_RR_RATIO)
             
             qty = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
+            
+            # Cap: el notional máximo es balance * leverage * 0.8 (80% del margen disponible)
+            notional = qty * entry_price
+            max_notional = account['available'] * LEVERAGE * 0.8
+            if notional > max_notional:
+                qty_capped = round(max_notional / entry_price, 3)
+                logger.warning(f"[{SYMBOL}] Qty capado por margen: {qty:.4f} → {qty_capped:.4f} (notional {notional:.0f} → {max_notional:.0f})")
+                qty = qty_capped
 
             if qty > 0:
                 ejecutar_apertura_completa(client, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE)
