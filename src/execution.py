@@ -98,7 +98,7 @@ def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp
 
         # 5. Registro y Notificación
         record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
-        crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, risk_pct)
+        crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
         
         return True
 
