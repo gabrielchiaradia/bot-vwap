@@ -62,7 +62,7 @@ class TelegramNotifier:
         )
         self._send_async(msg)
 
-def alert_trade_close(self, symbol, pnl, result, qty, entry_price, exit_price):
+    def alert_trade_close(self, symbol, pnl, result, qty, entry_price, exit_price):
         if result == "WIN":
             emoji, title = "✅", "POSICIÓN CERRADA (PROFIT)"
         elif result == "BREAKEVEN":
@@ -88,7 +88,7 @@ def alert_trade_close(self, symbol, pnl, result, qty, entry_price, exit_price):
         )
         self._send_async(msg)
 
-def alert_error(self, context, error):
+    def alert_error(self, context, error):
         msg = self._tag(
             f"🚨 <b>ALERTA DE ERROR</b>\n"
             f"───────────────────\n"
@@ -99,7 +99,7 @@ def alert_error(self, context, error):
         )
         self._send_async(msg)
 
-def heartbeat_si_corresponde(self, client, cycle_count: int, minutos: int = 60):
+    def heartbeat_si_corresponde(self, client, cycle_count: int, minutos: int = 60):
         global _ultimo_heartbeat
         ahora = time.time()
         
