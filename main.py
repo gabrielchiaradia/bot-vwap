@@ -1,5 +1,4 @@
 import time
-import notifier
 from src.config import SYMBOL, BOT_ID, BOT_NAME, TP_RR_RATIO, RISK_PER_TRADE, BAND_MULT
 # Asegurate de tener TIMEFRAME o INTERVALO en tu config (ej: "1m")
 from src.config import TIMEFRAME 
