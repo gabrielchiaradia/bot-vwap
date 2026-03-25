@@ -96,7 +96,12 @@ def ejecutar_ciclo_ws(df_velas, buffer):
 
             if qty > 0:
                 ejecutar_apertura_completa(client, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE)
-
+        # ==========================================
+        # REPORTE DE ESTADO (Delega todo al notifier)
+        # ==========================================
+        notifier = crear_notifier()
+        notifier.heartbeat_si_corresponde(client, cycle_count)
+        
         cycle_count += 1
 
     except Exception as e:
