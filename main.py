@@ -1,4 +1,5 @@
 import time
+import notifier
 from src.config import SYMBOL, BOT_ID, BOT_NAME, TP_RR_RATIO, RISK_PER_TRADE, BAND_MULT
 # Asegurate de tener TIMEFRAME o INTERVALO en tu config (ej: "1m")
 from src.config import TIMEFRAME 
@@ -8,7 +9,7 @@ from src.strategy import obtener_señal_actual
 from src.execution import ejecutar_apertura_completa, gestionar_resguardo_posicion, sincronizar_realidad_vs_journal
 from src.risk import calculate_position_size, check_drawdown_alert, can_trade
 from src.live_writer import exportar_dashboard, exportar_status
-from src.notifier import alert_startup
+from src.notifier import crear_notifier
 from src.journal import _load
 
 # Importamos el nuevo stream de WebSockets
@@ -30,7 +31,8 @@ def inicializar():
 
     # Notificación de arranque
     balance_inicial = get_account_status(c)['wallet_balance']
-    alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, BAND_MULT, balance_inicial)
+    notifier = crear_notifier()
+    notifier.alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, BAND_MULT, balance_inicial)
     
     return c
 

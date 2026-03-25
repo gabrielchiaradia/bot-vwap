@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from src.logger import logger
 from src.config import BOT_ID
 from src.journal import record_open, _load, _save
-from src.notifier import alert_trade_open
+from src.notifier import crear_notifier
 from src.exchange import (
     cancel_all_open_orders, 
     place_limit_order, 
@@ -98,7 +98,7 @@ def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp
 
         # 5. Registro y Notificación
         record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
-        alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, risk_pct)
+        crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, risk_pct)
         
         return True
 
@@ -176,6 +176,29 @@ def sincronizar_realidad_vs_journal(client, symbol):
                     f"Neto={trade['pnl_usdt']} "
                     f"Exit={ultimo_precio}"
                 )
+
+                # ==========================================
+                # INICIO NUEVO: ALERTA DE TELEGRAM AL CERRAR
+                # ==========================================
+                notifier = crear_notifier()
+                
+                pnl_neto = trade['pnl_usdt']
+                if pnl_neto > 0:
+                    resultado = "WIN"
+                elif pnl_neto < 0:
+                    resultado = "LOSS"
+                else:
+                    resultado = "BREAKEVEN"
+
+                notifier.alert_trade_close(
+                    symbol=symbol,
+                    pnl=pnl_neto,
+                    result=resultado,
+                    qty=float(trade.get('quantity', 0)),
+                    entry_price=float(trade.get('entry_price', 0)),
+                    exit_price=ultimo_precio
+                )
+                # ==========================================
             except Exception as e:
                 logger.error(f"Error calculando PnL/Fees: {e}")
 
