@@ -93,12 +93,13 @@ def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp
                 logger.info(f"[{symbol}] ✅ Posición detectada. SL/TP colocados.")
             except Exception as e:
                 logger.error(f"Error colocando SL/TP post-fill: {e}")
+            # Notificacion solo cuando se confirmo el fill
+            record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open)
+            crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
         else:
-            logger.warning(f"[{symbol}] ⚠️ LIMIT no se llenó en 10s. El SL/TP se colocará en el próximo ciclo de monitoreo.")
-
-        # 5. Registro y Notificación
-        record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open)
-        crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
+            logger.warning(f"[{symbol}] ⚠️ LIMIT no se llenó en 10s. Orden activa en Binance, monitoreando...")
+            # Registramos igual para que el rescatador lo siga
+            record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open)
         
         return True
 

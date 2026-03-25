@@ -100,8 +100,12 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
         # 1. Obtener órdenes abiertas de Binance
         open_orders = client.futures_get_open_orders(symbol=symbol)
         
-        # 2. Filtramos SL y TP (STOP_MARKET, TAKE_PROFIT_MARKET, etc.)
-        exit_orders = [o for o in open_orders if o['type'] in ['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'TAKE_PROFIT']]
+        # 2. Filtramos SL y TP — incluye LIMIT reduceOnly (usado como TP)
+        exit_orders = [
+            o for o in open_orders
+            if o['type'] in ['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'TAKE_PROFIT', 'STOP']
+            or (o['type'] == 'LIMIT' and o.get('reduceOnly') == True)
+        ]
         
         if len(exit_orders) < 2:
             logger.warning(f"[{symbol}] Protección incompleta ({len(exit_orders)}/2). Rescatando...")
@@ -120,8 +124,12 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
 
             # Identificar qué órdenes faltan por tipo
             tipos_presentes = {o['type'] for o in exit_orders}
-            tiene_sl = bool({'STOP_MARKET', 'STOP'} & tipos_presentes)
-            tiene_tp = bool({'TAKE_PROFIT_MARKET', 'TAKE_PROFIT'} & tipos_presentes)
+            tiene_sl = any(
+                o['type'] in {'STOP_MARKET', 'STOP'} and o.get('reduceOnly') == True
+                for o in open_orders
+            )
+            tiene_tp = bool({'TAKE_PROFIT_MARKET', 'TAKE_PROFIT'} & tipos_presentes) \
+                       or any(o['type'] == 'LIMIT' and o.get('reduceOnly') == True for o in exit_orders)
 
             # Colocar solo lo que falta, sin cancelar lo que ya existe
             if not tiene_sl:
@@ -131,7 +139,8 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
                         side=close_side,
                         type=FUTURE_ORDER_TYPE_STOP_MARKET,
                         stopPrice=sl,
-                        closePosition=True
+                        quantity=qty,
+                        reduceOnly=True
                     )
                     logger.info(f"[{symbol}] SL rescatado en {sl}")
                 except Exception as e:
@@ -205,7 +214,8 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
             side=close_side,
             type=FUTURE_ORDER_TYPE_STOP_MARKET,
             stopPrice=sl_price,
-            closePosition=True
+            quantity=qty,
+            reduceOnly=True
         )
 
         # Take Profit (Limit)
