@@ -177,3 +177,34 @@ def get_open_position(client, symbol):
     except Exception as e:
         logger.error(f"Error obteniendo posición: {e}")
         return None
+
+def get_klines_rest(client, symbol, interval, limite=100):
+    """
+    Descarga el historial inicial de velas vía REST API 
+    para 'cebar' el buffer del WebSocket.
+    """
+    import pandas as pd
+    
+    try:
+        klines = client.futures_klines(symbol=symbol, interval=interval, limit=limite)
+        
+        # Binance devuelve una lista de listas, la convertimos a DataFrame
+        df = pd.DataFrame(klines, columns=[
+            'timestamp', 'open', 'high', 'low', 'close', 'volume',
+            'close_time', 'quote_asset_volume', 'number_of_trades',
+            'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+        ])
+        
+        # Formateamos el tiempo para que el WebSocket lo entienda
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df.set_index('timestamp', inplace=True)
+        
+        # Convertimos los textos a números
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            df[col] = df[col].astype(float)
+            
+        return df
+    except Exception as e:
+        from src.logger import logger
+        logger.error(f"Error descargando historial REST: {e}")
+        return None
