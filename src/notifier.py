@@ -108,13 +108,17 @@ class TelegramNotifier:
             try:
                 # Importamos acá adentro para evitar problemas cruzados
                 from src.exchange import get_account_status
-                balance = get_account_status(client)
+                account = get_account_status(client)
+                balance = account['wallet_balance']
+                pnl     = account['unrealized_pnl']
+                pnl_emoji = "📈" if pnl >= 0 else "📉"
                 
                 msg = self._tag(
                     f"🟢 <b>REPORTE DE ESTADO</b>\n"
                     f"───────────────────\n"
                     f"🕒 <b>Uptime:</b> {cycle_count} minutos\n"
                     f"💰 <b>Balance:</b> <code>{balance:.2f} USDT</code>\n"
+                    f"{pnl_emoji} <b>PnL abierto:</b> <code>{pnl:+.2f} USDT</code>\n"
                     f"✅ <i>El bot sigue operando correctamente.</i>"
                 )
                 self._send_async(msg)
