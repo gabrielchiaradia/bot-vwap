@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timezone
 from src.config import RISK_PER_TRADE, SYMBOL, BOT_ID, JOURNAL_FILE
 from src.logger import logger
-from src.notifier import _send_async, _tag
+from src.notifier import crear_notifier
 
 
 # Estado interno para el Cortacircuitos (Daily Stop)
@@ -107,7 +107,7 @@ def check_drawdown_alert(current_balance):
         drop = (initial_balance - current_balance) / initial_balance
         
         if drop >= 0.10: # 10% de caída
-            msg = _tag(f"🚨 <b>ALERTA DE DRAWDOWN DIARIO</b>\nLa cuenta cayó {drop*100:.1f}% hoy.\nInicio del día: {initial_balance:.2f} USDT\nActual: {current_balance:.2f} USDT")
-            _send_async(msg)
+            notifier = crear_notifier()
+            notifier._send_async(f"🚨 <b>ALERTA DE DRAWDOWN DIARIO</b>\nLa cuenta cayó {drop*100:.1f}% hoy.\nInicio del día: {initial_balance:.2f} USDT\nActual: {current_balance:.2f} USDT")
     except Exception as e:
         logger.error(f"Error en alerta de drawdown: {e}")
