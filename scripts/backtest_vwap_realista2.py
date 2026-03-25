@@ -422,7 +422,7 @@ def main():
                   f"WR={s['winrate']}% "
                   f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
                   f"DD={s['max_drawdown']}%"
-                  f"Risk={s['risk_pct']})"
+                  f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")
 
     out = os.path.join("backtest/results", filename)
