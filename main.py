@@ -106,18 +106,24 @@ def main():
     # 1. Inicializamos y guardamos el cliente
     client = inicializar()
     
-    # 2. Inicializamos el Stream de Binance
+    # 2. DESCARGA INICIAL (Esto es lo que falta)
+    # Necesitamos traer historial por REST para que el buffer no empiece de cero
+    from src.exchange import get_klines_rest # Asegurate que esta función exista en exchange.py
+    logger.info("Descargando historial inicial para el buffer...")
+    df_historico = get_klines_rest(client, SYMBOL, TIMEFRAME, limite=100)
+
+    # 3. Inicializamos el Stream de Binance
     logger.info("Conectando al WebSocket de Binance...")
     stream = BinanceKlineStream(
         symbol=SYMBOL,
         interval=TIMEFRAME, # Importado de config (ej: "1m")
         on_candle_close=ejecutar_ciclo_ws, # El bot ahora es manejado por esta función
-        testnet=False, 
+        testnet=True, 
         buffer_size=300
     )
     
     # 3. Arrancamos el stream en un hilo secundario
-    stream.iniciar()
+    stream.iniciar(df_ltf_hist=df_historico)
     
     # 4. Loop infinito para mantener vivo el contenedor Docker
     try:
