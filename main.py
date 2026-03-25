@@ -79,7 +79,7 @@ def ejecutar_ciclo_ws(df_velas, buffer):
             account['unrealized_pnl'], account['margin_balance'], 
             account['available'], 1 if pos_abierta else 0
         )
-        exportar_dashboard() # Asegurate de no pasar 'client' si tu función exportar_dashboard no lo recibe
+        exportar_dashboard(client) # Asegurate de no pasar 'client' si tu función exportar_dashboard no lo recibe
         
         # 6. Lógica de Disparo
         if signal and not pos_abierta:
