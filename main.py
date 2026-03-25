@@ -72,7 +72,7 @@ def ejecutar_ciclo_ws(df_velas, buffer):
 
         # 4. An谩lisis de Estrategia
         # (Ver nota abajo sobre esta l铆nea)
-        signal, entry_price, std_dev = obtener_se帽al_actual(client)
+        signal, entry_price, std_dev = obtener_señal_actual(client)
 
         # 5. Actualizaci贸n del Dashboard Live
         exportar_status(
