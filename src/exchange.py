@@ -124,18 +124,45 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
     except Exception as e:
         logger.error(f"Error en verificar_y_rescatar_sl_tp: {e}")
         return False
+        
+def _round_tick(price: float, tick: float) -> float:
+    """Redondea el precio al tick size más cercano hacia abajo."""
+    import math
+    # Usamos math para evitar errores de punto flotante
+    precision = len(str(tick).rstrip('0').split('.')[-1]) if '.' in str(tick) else 0
+    return round(math.floor(float(price) / tick) * tick, precision)
+
+def get_tick_size(client, symbol) -> float:
+    """Obtiene el tick size del símbolo desde Binance."""
+    try:
+        info = client.futures_exchange_info()
+        for s in info['symbols']:
+            if s['symbol'] == symbol:
+                for f in s['filters']:
+                    if f['filterType'] == 'PRICE_FILTER':
+                        return float(f['tickSize'])
+    except Exception as e:
+        logger.warning(f"No se pudo obtener tick size para {symbol}: {e}")
+    return 0.1  # fallback seguro para BTC
     
 def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
     """Coloca las órdenes de protección una vez entramos al trade"""
     try:
-        # --- LIMPIEZA PREVIA PARA EVITAR DUPLICADOS ---
-        # Esto borra órdenes LIMIT/STOP previas del símbolo para que no se pisen
-        client.futures_cancel_all_open_orders(symbol=symbol)
-        
-        # El lado de cierre es el opuesto al de entrada
+        tick = get_tick_size(client, symbol)
         close_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
-        sl_price = round(float(sl_price), 2)
-        tp_price = round(float(tp_price), 2)
+        sl_price = _round_tick(float(sl_price), tick)
+        tp_price = _round_tick(float(tp_price), tick)
+        
+        # --- LIMPIEZA SELECTIVA: solo cancela órdenes de salida existentes ---
+        # No cancelamos todo para no borrar órdenes de otro bot en la misma cuenta
+        open_orders = client.futures_get_open_orders(symbol=symbol)
+        exit_types = {'STOP_MARKET', 'TAKE_PROFIT_MARKET', 'TAKE_PROFIT', 'STOP'}
+        for o in open_orders:
+            if o['type'] in exit_types:
+                try:
+                    client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
+                except Exception:
+                    pass  # Si ya se ejecutó, ignoramos
         
         # Stop Loss (Market)
         client.futures_create_order(
