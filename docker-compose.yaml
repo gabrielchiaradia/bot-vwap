@@ -17,15 +17,35 @@
 
 services:
   # ── Bot ETH ────────────────────────────────────────────
-  vwap-eth:
+  #vwap-eth:
+  #  build: .
+  #  container_name: vwap-eth
+  #  restart: unless-stopped
+  #  env_file: .env.eth
+  #  user: "1000:1000"
+  #  environment:
+  #    - TZ=America/Argentina/Buenos_Aires
+  #    - BOT_ID=ETH
+  #    - PYTHONPATH=/app
+  #  volumes:
+  #    - .:/app
+  #    - ./dashboard/data:/app/logs
+  #  logging:
+  #    driver: json-file
+  #    options:
+  #      max-size: "10m"
+  #      max-file: "3"
+        
+  # ── Bot SOL ────────────────────────────────────────────
+  vwap-sol:
     build: .
-    container_name: vwap-eth
+    container_name: vwap-sol
     restart: unless-stopped
-    env_file: .env.eth
+    env_file: .env.sol
     user: "1000:1000"
     environment:
       - TZ=America/Argentina/Buenos_Aires
-      - BOT_ID=ETH
+      - BOT_ID=SOL
       - PYTHONPATH=/app
     volumes:
       - .:/app
