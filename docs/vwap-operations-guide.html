@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VWAP Bot — Guía de Operaciones</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root {
+  --ink:     #0f0f0f;
+  --paper:   #f5f2eb;
+  --cream:   #ede9df;
+  --rule:    #d4cfc4;
+  --accent:  #1a5c8a;
+  --accent2: #1a5c3a;
+  --code-bg: #1c1c1c;
+  --code-fg: #e8e0d0;
+  --warn:    #8b5e00;
+  --warn-bg: #fdf6e3;
+  --ok:      #1a5c3a;
+  --ok-bg:   #edf7f1;
+  --btc:     #c1440e;
+  --eth:     #1a5c8a;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body { background: var(--paper); color: var(--ink); font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 1.8; min-height: 100vh; }
+body::before { content: ''; position: fixed; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); pointer-events: none; z-index: 0; opacity: 0.4; }
+.page { max-width: 860px; margin: 0 auto; padding: 0 32px 80px; position: relative; z-index: 1; }
+
+/* Cover */
+.cover { border-bottom: 3px double var(--rule); padding: 60px 0 40px; margin-bottom: 48px; }
+.cover-tag { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); margin-bottom: 16px; }
+.cover h1 { font-family: 'DM Serif Display', serif; font-size: clamp(32px, 5vw, 52px); line-height: 1.1; color: var(--ink); margin-bottom: 12px; }
+.cover h1 em { color: var(--accent); font-style: italic; }
+.cover-sub { color: #5a5449; font-size: 12px; margin-bottom: 28px; }
+.cover-meta { display: flex; gap: 24px; flex-wrap: wrap; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #8a8070; padding-top: 20px; border-top: 1px solid var(--rule); }
+.cover-meta span::before { content: '◆ '; color: var(--accent); }
+
+/* Config cards */
+.config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 24px 0; }
+.config-card { border: 1px solid var(--rule); padding: 18px 20px; position: relative; }
+.config-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+.config-card.btc::before { background: var(--btc); }
+.config-card.eth::before { background: var(--eth); }
+.config-card h4 { font-family: 'DM Serif Display', serif; font-size: 15px; margin-bottom: 10px; }
+.config-card h4 .sym { font-size: 11px; font-style: normal; padding: 1px 6px; margin-left: 6px; letter-spacing: 0.05em; }
+.config-card h4 .sym.btc { background: var(--btc); color: #fff; }
+.config-card h4 .sym.eth { background: var(--eth); color: #fff; }
+.config-row { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; border-bottom: 1px dotted var(--rule); }
+.config-row:last-child { border: none; }
+.config-row .k { color: #8a8070; }
+.config-row .v { font-weight: 600; }
+
+/* TOC */
+.toc { background: var(--cream); border: 1px solid var(--rule); border-left: 4px solid var(--accent); padding: 24px 28px; margin-bottom: 48px; }
+.toc h2 { font-family: 'DM Serif Display', serif; font-size: 16px; margin-bottom: 16px; color: var(--ink); }
+.toc ol { padding-left: 20px; }
+.toc li { margin-bottom: 6px; }
+.toc a { color: var(--ink); text-decoration: none; font-size: 12px; border-bottom: 1px dotted var(--rule); transition: color 0.2s; }
+.toc a:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Sections */
+.section { margin-bottom: 56px; }
+.section-header { display: flex; align-items: baseline; gap: 16px; border-bottom: 2px solid var(--ink); padding-bottom: 8px; margin-bottom: 28px; }
+.section-num { font-family: 'DM Serif Display', serif; font-size: 42px; color: var(--rule); line-height: 1; flex-shrink: 0; }
+.section-title { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--ink); }
+h3 { font-family: 'DM Serif Display', serif; font-size: 16px; margin: 28px 0 12px; color: var(--ink); }
+h3::before { content: '§ '; color: var(--accent); font-style: italic; }
+p { margin-bottom: 12px; color: #2a2520; }
+
+/* Code */
+pre { background: var(--code-bg); color: var(--code-fg); border-radius: 4px; padding: 20px 24px; overflow-x: auto; margin: 16px 0; font-size: 12px; line-height: 1.7; position: relative; border-left: 3px solid var(--accent); }
+pre .comment { color: #6a6055; }
+pre .cmd { color: #7ab8f5; }
+pre .val { color: #9ec88a; }
+pre .btc-c { color: #f0a060; }
+pre .eth-c { color: #60b0f0; }
+code { background: var(--cream); border: 1px solid var(--rule); padding: 1px 5px; border-radius: 2px; font-size: 11px; color: var(--accent); }
+pre code { background: none; border: none; padding: 0; color: inherit; font-size: inherit; }
+
+/* Copy button */
+.code-block { position: relative; }
+.copy-btn { position: absolute; top: 10px; right: 10px; background: #2e2e2e; border: 1px solid #444; color: #aaa; font-family: 'IBM Plex Mono', monospace; font-size: 10px; padding: 3px 8px; border-radius: 3px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.05em; }
+.copy-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.copy-btn.copied { background: var(--accent2); color: #fff; border-color: var(--accent2); }
+
+/* Alerts */
+.alert { padding: 14px 18px; border-radius: 2px; margin: 16px 0; font-size: 12px; line-height: 1.6; border-left: 4px solid; }
+.alert-warn { background: var(--warn-bg); border-color: var(--warn); color: var(--warn); }
+.alert-ok   { background: var(--ok-bg);   border-color: var(--ok);   color: var(--ok); }
+.alert-info { background: var(--cream);   border-color: var(--rule); color: #5a5449; }
+.alert strong { display: block; margin-bottom: 4px; text-transform: uppercase; font-size: 10px; letter-spacing: 0.1em; }
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 11px; }
+th { background: var(--ink); color: var(--paper); padding: 8px 12px; text-align: left; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; font-size: 10px; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:nth-child(even) td { background: var(--cream); }
+td code { font-size: 11px; }
+
+/* Bot tags inline */
+.tag { display: inline-block; font-size: 9px; padding: 1px 5px; letter-spacing: 0.08em; font-weight: 600; vertical-align: middle; margin-left: 4px; }
+.tag.btc { background: var(--btc); color: #fff; }
+.tag.eth { background: var(--eth); color: #fff; }
+.tag.all { background: var(--ink); color: var(--paper); }
+
+footer { border-top: 3px double var(--rule); padding: 24px 0; margin-top: 60px; font-size: 10px; color: #8a8070; display: flex; justify-content: space-between; align-items: center; letter-spacing: 0.05em; }
+@media (max-width: 600px) { .page { padding: 0 16px 60px; } .cover h1 { font-size: 28px; } .config-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- PORTADA -->
+<div class="cover">
+  <div class="cover-tag">Guía de operaciones · v1.0</div>
+  <h1>VWAP Reversion Bot<br><em>Manual de Operaciones</em></h1>
+  <div class="cover-sub">Dos instancias independientes (BTC + ETH) sobre una misma cuenta Binance Futures</div>
+  <div class="cover-meta">
+    <span>Vultr VPS</span>
+    <span>Docker</span>
+    <span>SSH</span>
+    <span>Dashboard :8081</span>
+    <span>Telegram</span>
+  </div>
+
+  <div class="config-grid" style="margin-top: 28px;">
+    <div class="config-card btc">
+      <h4>Bot BTC <span class="sym btc">BTCUSDT</span></h4>
+      <div class="config-row"><span class="k">Container</span><span class="v">vwap-btc</span></div>
+      <div class="config-row"><span class="k">Band mult</span><span class="v">2.0σ</span></div>
+      <div class="config-row"><span class="k">RR</span><span class="v">0.4</span></div>
+      <div class="config-row"><span class="k">Risk/trade</span><span class="v">3% (testnet) → 1% (real)</span></div>
+      <div class="config-row"><span class="k">Backtest 360d</span><span class="v">+335% · DD 9.5%</span></div>
+    </div>
+    <div class="config-card eth">
+      <h4>Bot ETH <span class="sym eth">ETHUSDT</span></h4>
+      <div class="config-row"><span class="k">Container</span><span class="v">vwap-eth</span></div>
+      <div class="config-row"><span class="k">Band mult</span><span class="v">2.5σ</span></div>
+      <div class="config-row"><span class="k">RR</span><span class="v">0.4</span></div>
+      <div class="config-row"><span class="k">Risk/trade</span><span class="v">3% (testnet) → 1% (real)</span></div>
+      <div class="config-row"><span class="k">Backtest 360d</span><span class="v">+175% · DD 9.5%</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ÍNDICE -->
+<div class="toc">
+  <h2>Índice</h2>
+  <ol>
+    <li><a href="#s1">Conectarse al servidor (SSH)</a></li>
+    <li><a href="#s2">Iniciar, parar y reiniciar los bots</a></li>
+    <li><a href="#s3">Ver logs</a></li>
+    <li><a href="#s4">Dashboard web</a></li>
+    <li><a href="#s5">Subir cambios al servidor (Git)</a></li>
+    <li><a href="#s6">Editar configuración (.env)</a></li>
+    <li><a href="#s7">Health check automático</a></li>
+    <li><a href="#s8">Correr backtests</a></li>
+    <li><a href="#s9">Pasar de Testnet a Real</a></li>
+    <li><a href="#s10">Referencia rápida de comandos</a></li>
+  </ol>
+</div>
+
+
+<!-- 1 -->
+<div class="section" id="s1">
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <span class="section-title">Conectarse al servidor (SSH)</span>
+  </div>
+
+  <h3>Desde Windows (CMD o PowerShell)</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">ssh</span> -i C:\Users\Gabriel\.ssh\id_ed25519 root@167.179.114.168</pre>
+  </div>
+
+  <h3>Cambiar al usuario botuser</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">su</span> - botuser
+<span class="cmd">cd</span> ~/bot-vwap</pre>
+  </div>
+
+  <h3>Desconectarse</h3>
+  <div class="code-block">
+    <pre><span class="cmd">exit</span>    <span class="comment"># salir de botuser → vuelve a root</span>
+<span class="cmd">exit</span>    <span class="comment"># salir del VPS → vuelve a tu PC</span></pre>
+  </div>
+</div>
+
+
+<!-- 2 -->
+<div class="section" id="s2">
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <span class="section-title">Iniciar, parar y reiniciar los bots</span>
+  </div>
+
+  <p>Todos los comandos se ejecutan desde <code>~/bot-vwap</code> como <code>botuser</code>. Los tres containers son <code>vwap-btc</code>, <code>vwap-eth</code> y <code>vwap-dashboard</code>.</p>
+
+  <h3>Iniciar todo</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> up -d vwap-btc vwap-eth vwap-dashboard</pre>
+  </div>
+
+  <h3>Iniciar un bot específico</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> up -d <span class="btc-c">vwap-btc</span>    <span class="comment"># solo BTC</span>
+<span class="cmd">docker compose</span> up -d <span class="eth-c">vwap-eth</span>    <span class="comment"># solo ETH</span></pre>
+  </div>
+
+  <h3>Parar todo</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> down</pre>
+  </div>
+
+  <h3>Parar un bot específico</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> stop <span class="btc-c">vwap-btc</span>
+<span class="cmd">docker compose</span> stop <span class="eth-c">vwap-eth</span></pre>
+  </div>
+
+  <h3>Reiniciar sin reconstruir</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> restart <span class="btc-c">vwap-btc</span>
+<span class="cmd">docker compose</span> restart <span class="eth-c">vwap-eth</span></pre>
+  </div>
+
+  <h3>Reconstruir y reiniciar (después de cambios de código)</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> down
+<span class="cmd">docker compose</span> build --no-cache
+<span class="cmd">docker compose</span> up -d vwap-btc vwap-eth vwap-dashboard</pre>
+  </div>
+
+  <h3>Ver estado de todos los containers</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> ps</pre>
+  </div>
+
+  <div class="alert alert-info">
+    <strong>Inicio automático</strong>
+    Ambos bots tienen <code>restart: unless-stopped</code>. Si el VPS reinicia, los containers vuelven a levantarse solos.
+  </div>
+
+  <div class="alert alert-warn">
+    <strong>Riesgo de posiciones abiertas</strong>
+    Antes de parar un bot, verificá que no tenga una posición abierta en Binance. Si la tiene, cerrala manualmente primero o el SL/TP quedará huérfano.
+  </div>
+</div>
+
+
+<!-- 3 -->
+<div class="section" id="s3">
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <span class="section-title">Ver logs</span>
+  </div>
+
+  <h3>Logs en tiempo real — un bot <span class="tag btc">BTC</span></h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> logs -f <span class="btc-c">vwap-btc</span></pre>
+  </div>
+
+  <h3>Logs en tiempo real — un bot <span class="tag eth">ETH</span></h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> logs -f <span class="eth-c">vwap-eth</span></pre>
+  </div>
+
+  <h3>Ambos bots en paralelo (con colores)</h3>
+  <p>El script <code>tools/logs-all.sh</code> muestra BTC en verde y ETH en cyan, entrelazados en tiempo real:</p>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">bash</span> tools/logs-all.sh</pre>
+  </div>
+
+  <h3>Últimas N líneas</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> logs --tail 50 <span class="btc-c">vwap-btc</span>
+<span class="cmd">docker compose</span> logs --tail 50 <span class="eth-c">vwap-eth</span></pre>
+  </div>
+
+  <h3>Archivos de log persistentes</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">tail</span> -f ~/bot-vwap/dashboard/data/journal_BTC.json   <span class="comment"># trades BTC</span>
+<span class="cmd">tail</span> -f ~/bot-vwap/dashboard/data/journal_ETH.json   <span class="comment"># trades ETH</span></pre>
+  </div>
+
+  <h3>Uso de recursos</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker</span> stats vwap-btc vwap-eth</pre>
+  </div>
+
+  <h3>Lo que debés ver en los logs al arrancar correctamente</h3>
+  <table>
+    <tr><th>Línea</th><th>Significado</th></tr>
+    <tr><td><code>🚀 Iniciando Bot BTC para BTCUSDT</code></td><td>Container levantó</td></tr>
+    <tr><td><code>Apalancamiento configurado a 20x</code></td><td>Exchange configurado</td></tr>
+    <tr><td><code>El margen ya era ISOLATED</code></td><td>Normal, no es error</td></tr>
+    <tr><td><code>--- Ciclo 0 para BTCUSDT ---</code></td><td>Loop principal corriendo</td></tr>
+    <tr><td>Notificación en Telegram</td><td>Confirma que el bot está activo</td></tr>
+  </table>
+</div>
+
+
+<!-- 4 -->
+<div class="section" id="s4">
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <span class="section-title">Dashboard web</span>
+  </div>
+
+  <p>El dashboard es un container nginx separado que sirve el HTML en el puerto <strong>8081</strong>.</p>
+
+  <h3>Acceder</h3>
+  <p>Abrí en tu navegador: <code>http://167.179.114.168:8081</code></p>
+
+  <h3>Reiniciar el dashboard (después de cambios)</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> restart vwap-dashboard</pre>
+  </div>
+
+  <h3>Parar el dashboard</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> stop vwap-dashboard</pre>
+  </div>
+
+  <div class="alert alert-info">
+    <strong>Datos del dashboard</strong>
+    El dashboard lee de <code>dashboard/data/</code> que es el volumen compartido con ambos bots. Los archivos <code>bot_status_BTC.json</code>, <code>bot_status_ETH.json</code>, <code>journal_BTC.json</code> y <code>journal_ETH.json</code> se actualizan cada ciclo (cada 1 minuto).
+  </div>
+</div>
+
+
+<!-- 5 -->
+<div class="section" id="s5">
+  <div class="section-header">
+    <span class="section-num">05</span>
+    <span class="section-title">Subir cambios al servidor (Git)</span>
+  </div>
+
+  <h3>Paso 1: Desde tu PC Windows, pushear a GitHub</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">cd</span> C:\Users\Gabriel\Downloads\bot-vwap
+<span class="cmd">git</span> add .
+<span class="cmd">git</span> commit -m <span class="val">"descripción del cambio"</span>
+<span class="cmd">git</span> push</pre>
+  </div>
+
+  <h3>Paso 2: Desde el VPS, bajar y reconstruir</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">cd</span> ~/bot-vwap
+<span class="cmd">git</span> pull
+<span class="cmd">docker compose</span> down
+<span class="cmd">docker compose</span> build --no-cache
+<span class="cmd">docker compose</span> up -d vwap-btc vwap-eth vwap-dashboard</pre>
+  </div>
+
+  <div class="alert alert-warn">
+    <strong>Los .env no se suben a Git</strong>
+    Los archivos <code>.env.btc</code> y <code>.env.eth</code> están en <code>.gitignore</code>. Si los cambiás en tu PC, tenés que editarlos manualmente en el VPS también.
+  </div>
+</div>
+
+
+<!-- 6 -->
+<div class="section" id="s6">
+  <div class="section-header">
+    <span class="section-num">06</span>
+    <span class="section-title">Editar configuración (.env)</span>
+  </div>
+
+  <h3>Editar el .env de cada bot</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">nano</span> ~/bot-vwap/.env.btc    <span class="comment"># configuración BTC</span>
+<span class="cmd">nano</span> ~/bot-vwap/.env.eth    <span class="comment"># configuración ETH</span></pre>
+  </div>
+  <p>Guardá con <code>Ctrl+O</code>, Enter, <code>Ctrl+X</code>.</p>
+
+  <h3>Configuración actual</h3>
+  <table>
+    <tr><th>Variable</th><th>BTC</th><th>ETH</th><th>Descripción</th></tr>
+    <tr><td><code>SYMBOL</code></td><td>BTCUSDT</td><td>ETHUSDT</td><td>Par de trading</td></tr>
+    <tr><td><code>LEVERAGE</code></td><td>20</td><td>20</td><td>Apalancamiento</td></tr>
+    <tr><td><code>BAND_MULT</code></td><td>2.0</td><td>2.5</td><td>Desviaciones estándar para las bandas</td></tr>
+    <tr><td><code>TP_RR_RATIO</code></td><td>0.4</td><td>0.4</td><td>Ratio riesgo:recompensa</td></tr>
+    <tr><td><code>RISK_PER_TRADE</code></td><td>3.0 → 1.0</td><td>3.0 → 1.0</td><td>% del balance por trade</td></tr>
+    <tr><td><code>IS_TESTNET</code></td><td>True</td><td>True</td><td>Dinero ficticio</td></tr>
+    <tr><td><code>JOURNAL_FILE</code></td><td>logs/journal_BTC.json</td><td>logs/journal_ETH.json</td><td>Archivo de trades</td></tr>
+  </table>
+
+  <p>Después de editar cualquier <code>.env</code>, reiniciá el bot correspondiente:</p>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> restart <span class="btc-c">vwap-btc</span>    <span class="comment"># o vwap-eth</span></pre>
+  </div>
+</div>
+
+
+<!-- 7 -->
+<div class="section" id="s7">
+  <div class="section-header">
+    <span class="section-num">07</span>
+    <span class="section-title">Health check automático</span>
+  </div>
+
+  <p>El script <code>tools/health_vwap.sh</code> verifica cada 5 minutos que ambos containers estén corriendo y generando logs. Si detecta un problema, reinicia el container afectado y manda un mensaje a Telegram.</p>
+
+  <h3>Instalar el cron (como root)</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="comment"># Primero desde root (no botuser)</span>
+<span class="cmd">cd</span> /home/botuser/bot-vwap
+<span class="cmd">sudo bash</span> tools/health_vwap.sh --install</pre>
+  </div>
+
+  <h3>Verificar que está instalado</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">crontab</span> -l    <span class="comment"># debe mostrar la línea de health_vwap.sh</span></pre>
+  </div>
+
+  <h3>Ejecutar manualmente</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">bash</span> tools/health_vwap.sh</pre>
+  </div>
+
+  <h3>Ver log del health check</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">tail</span> -30 ~/bot-vwap/dashboard/data/health_vwap.log</pre>
+  </div>
+
+  <h3>Desinstalar</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">sudo bash</span> tools/health_vwap.sh --uninstall</pre>
+  </div>
+
+  <div class="alert alert-ok">
+    <strong>Qué detecta</strong>
+    Dos condiciones: (1) container caído → lo reinicia automáticamente; (2) container corriendo pero sin actividad por 5 minutos → avisa por Telegram pero no reinicia (puede ser mercado sin señales).
+  </div>
+</div>
+
+
+<!-- 8 -->
+<div class="section" id="s8">
+  <div class="section-header">
+    <span class="section-num">08</span>
+    <span class="section-title">Correr backtests</span>
+  </div>
+
+  <p>Los backtests se ejecutan con Python directamente, sin Docker. Usá el script <code>backtest_vwap_realista.py</code> que incluye comisiones y simulación intra-vela realista.</p>
+
+  <h3>Backtest simple</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">python3</span> scripts/backtest_vwap_realista.py --symbol BTCUSDT --dias 90</pre>
+  </div>
+
+  <h3>Con parámetros específicos</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">python3</span> scripts/backtest_vwap_realista.py \
+  --symbol BTCUSDT --dias 360 \
+  --band-mult <span class="val">2.0</span> --rr <span class="val">0.4</span> --risk <span class="val">3</span></pre>
+  </div>
+
+  <h3>Sweep de múltiples parámetros (separá con comas)</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">python3</span> scripts/backtest_vwap_realista.py \
+  --symbol BTCUSDT --dias 360 \
+  --band-mult <span class="val">2.0,2.5,3.0</span> \
+  --rr <span class="val">0.4,0.5,0.6,0.7</span> \
+  --risk <span class="val">1,2,3</span></pre>
+  </div>
+
+  <h3>Escanear BTC y ETH en una sola corrida</h3>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">python3</span> scripts/backtest_vwap_realista.py \
+  --scan --dias 360 \
+  --band-mult <span class="val">2.0,2.5</span> --rr <span class="val">0.4,0.5</span> --risk <span class="val">1,2,3</span></pre>
+  </div>
+
+  <p>Los resultados se guardan en <code>backtest/results/</code> y se visualizan en el dashboard en <code>http://167.179.114.168:8081</code>.</p>
+
+  <h3>Parámetros disponibles</h3>
+  <table>
+    <tr><th>Parámetro</th><th>Default</th><th>Descripción</th></tr>
+    <tr><td><code>--symbol</code></td><td>BTCUSDT</td><td>Par a testear</td></tr>
+    <tr><td><code>--dias</code></td><td>90</td><td>Ventana histórica en días</td></tr>
+    <tr><td><code>--band-mult</code></td><td>2.5</td><td>Multiplicador de banda (acepta comas)</td></tr>
+    <tr><td><code>--rr</code></td><td>0.5</td><td>Risk/Reward ratio (acepta comas)</td></tr>
+    <tr><td><code>--risk</code></td><td>1</td><td>% de riesgo por trade (acepta comas)</td></tr>
+    <tr><td><code>--min-profit</code></td><td>0.20</td><td>% mínimo de reward para tomar la señal</td></tr>
+    <tr><td><code>--sweep-rr</code></td><td>—</td><td>Prueba RR = 0.2, 0.3, 0.4, 0.5, 0.7</td></tr>
+    <tr><td><code>--scan</code></td><td>—</td><td>Corre BTC y ETH en paralelo</td></tr>
+  </table>
+
+  <div class="alert alert-info">
+    <strong>Caché de datos</strong>
+    Los datos históricos se cachean localmente en <code>backtest/data/</code> por 10 días. La primera corrida descarga de Binance; las siguientes son instantáneas.
+  </div>
+</div>
+
+
+<!-- 9 -->
+<div class="section" id="s9">
+  <div class="section-header">
+    <span class="section-num">09</span>
+    <span class="section-title">Pasar de Testnet a Real</span>
+  </div>
+
+  <div class="alert alert-warn">
+    <strong>Precaución</strong>
+    Solo pasar a real después de verificar que ambos bots operan correctamente en testnet. El trading con futuros y apalancamiento conlleva riesgo de pérdida total del capital.
+  </div>
+
+  <h3>Checklist antes de ir a real</h3>
+  <table>
+    <tr><th>Verificación</th><th>OK</th></tr>
+    <tr><td>Al menos 2 semanas de testnet sin errores críticos en logs</td><td>☐</td></tr>
+    <tr><td>SL/TP se colocan correctamente después de cada fill</td><td>☐</td></tr>
+    <tr><td>Journal registra todos los trades con PnL correcto</td><td>☐</td></tr>
+    <tr><td>Dashboard muestra datos en tiempo real</td><td>☐</td></tr>
+    <tr><td>Notificaciones Telegram funcionando</td><td>☐</td></tr>
+    <tr><td>Health check instalado y activo</td><td>☐</td></tr>
+  </table>
+
+  <h3>Pasos para el cambio</h3>
+  <p>1. Crear API keys reales en <a href="https://www.binance.com/es/my/settings/api-management">Binance → Gestión de API</a> con permisos de Futures.</p>
+  <p>2. Editar ambos <code>.env</code> en el VPS:</p>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">nano</span> ~/bot-vwap/.env.btc</pre>
+  </div>
+  <div class="code-block">
+    <pre><span class="val">IS_TESTNET</span>=false
+<span class="val">BINANCE_API_KEY</span>=tu_key_real
+<span class="val">BINANCE_API_SECRET</span>=tu_secret_real
+<span class="val">RISK_PER_TRADE</span>=1.0    <span class="comment"># bajar de 3% a 1%</span></pre>
+  </div>
+  <p>3. Hacer lo mismo para <code>.env.eth</code>.</p>
+  <p>4. Reiniciar ambos bots:</p>
+  <div class="code-block">
+    <button class="copy-btn" onclick="copiar(this)">copiar</button>
+    <pre><span class="cmd">docker compose</span> restart vwap-btc vwap-eth</pre>
+  </div>
+
+  <div class="alert alert-ok">
+    <strong>Recomendación</strong>
+    Arrancá con <code>RISK_PER_TRADE=1.0</code> en ambos bots (1% cada uno = 2% total de la cuenta). Verificá las primeras 5 operaciones reales antes de considerar subir el riesgo.
+  </div>
+</div>
+
+
+<!-- 10 -->
+<div class="section" id="s10">
+  <div class="section-header">
+    <span class="section-num">10</span>
+    <span class="section-title">Referencia rápida de comandos</span>
+  </div>
+
+  <h3>Conexión SSH</h3>
+  <table>
+    <tr><th>Acción</th><th>Comando</th></tr>
+    <tr><td>Conectarse al VPS</td><td><code>ssh -i C:\Users\Gabriel\.ssh\id_ed25519 root@167.179.114.168</code></td></tr>
+    <tr><td>Cambiar a botuser</td><td><code>su - botuser</code></td></tr>
+    <tr><td>Ir al proyecto</td><td><code>cd ~/bot-vwap</code></td></tr>
+  </table>
+
+  <h3>Docker — operaciones</h3>
+  <table>
+    <tr><th>Acción</th><th>Comando</th></tr>
+    <tr><td>Iniciar todo</td><td><code>docker compose up -d vwap-btc vwap-eth vwap-dashboard</code></td></tr>
+    <tr><td>Parar todo</td><td><code>docker compose down</code></td></tr>
+    <tr><td>Reiniciar BTC</td><td><code>docker compose restart vwap-btc</code></td></tr>
+    <tr><td>Reiniciar ETH</td><td><code>docker compose restart vwap-eth</code></td></tr>
+    <tr><td>Reconstruir</td><td><code>docker compose build --no-cache</code></td></tr>
+    <tr><td>Ver estado</td><td><code>docker compose ps</code></td></tr>
+    <tr><td>Logs BTC en vivo</td><td><code>docker compose logs -f vwap-btc</code></td></tr>
+    <tr><td>Logs ETH en vivo</td><td><code>docker compose logs -f vwap-eth</code></td></tr>
+    <tr><td>Logs ambos (colores)</td><td><code>bash tools/logs-all.sh</code></td></tr>
+    <tr><td>Uso de recursos</td><td><code>docker stats vwap-btc vwap-eth</code></td></tr>
+  </table>
+
+  <h3>Git — actualizar código</h3>
+  <table>
+    <tr><th>Acción</th><th>Comando</th></tr>
+    <tr><td>Subir desde Windows</td><td><code>git add . && git commit -m "msg" && git push</code></td></tr>
+    <tr><td>Bajar en VPS</td><td><code>git pull</code></td></tr>
+    <tr><td>Reconstruir y reiniciar</td><td><code>docker compose down && docker compose build --no-cache && docker compose up -d vwap-btc vwap-eth vwap-dashboard</code></td></tr>
+  </table>
+
+  <h3>Backtests</h3>
+  <table>
+    <tr><th>Acción</th><th>Comando</th></tr>
+    <tr><td>Backtest simple BTC</td><td><code>python3 scripts/backtest_vwap_realista.py --symbol BTCUSDT --dias 90</code></td></tr>
+    <tr><td>Con parámetros</td><td>Agregar <code>--band-mult 2.0 --rr 0.4 --risk 3</code></td></tr>
+    <tr><td>Sweep multi-parámetro</td><td><code>--band-mult 2.0,2.5 --rr 0.4,0.5 --risk 1,2,3</code></td></tr>
+    <tr><td>BTC + ETH juntos</td><td>Agregar <code>--scan</code></td></tr>
+  </table>
+
+  <h3>Configuración</h3>
+  <table>
+    <tr><th>Acción</th><th>Comando</th></tr>
+    <tr><td>Editar .env BTC</td><td><code>nano ~/bot-vwap/.env.btc</code></td></tr>
+    <tr><td>Editar .env ETH</td><td><code>nano ~/bot-vwap/.env.eth</code></td></tr>
+    <tr><td>Ver .env actual</td><td><code>cat ~/bot-vwap/.env.btc</code></td></tr>
+    <tr><td>Ver journals</td><td><code>ls -la ~/bot-vwap/dashboard/data/</code></td></tr>
+    <tr><td>Ver resultados backtest</td><td><code>ls -la ~/bot-vwap/backtest/results/</code></td></tr>
+  </table>
+
+  <h3>Health check</h3>
+  <table>
+    <tr><th>Acción</th><th>Comando</th></tr>
+    <tr><td>Instalar cron (como root)</td><td><code>sudo bash tools/health_vwap.sh --install</code></td></tr>
+    <tr><td>Verificar instalación</td><td><code>crontab -l</code></td></tr>
+    <tr><td>Ejecutar manual</td><td><code>bash tools/health_vwap.sh</code></td></tr>
+    <tr><td>Ver log</td><td><code>tail -30 ~/bot-vwap/dashboard/data/health_vwap.log</code></td></tr>
+    <tr><td>Desinstalar</td><td><code>sudo bash tools/health_vwap.sh --uninstall</code></td></tr>
+  </table>
+</div>
+
+
+<footer>
+  <span>VWAP Reversion Bot · Manual de Operaciones v1.0</span>
+  <span>VPS Vultr · Docker · GitHub</span>
+</footer>
+
+</div><!-- /page -->
+
+<script>
+function copiar(btn) {
+  var pre = btn.parentElement.querySelector('pre');
+  var texto = pre.innerText;
+  navigator.clipboard.writeText(texto).then(function() {
+    btn.textContent = '✓ copiado';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = 'copiar';
+      btn.classList.remove('copied');
+    }, 2000);
+  }).catch(function() {
+    btn.textContent = 'error';
+    setTimeout(function() { btn.textContent = 'copiar'; }, 2000);
+  });
+}
+</script>
+</body>
+</html>

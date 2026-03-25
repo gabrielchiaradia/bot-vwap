@@ -11,6 +11,7 @@ BOT_NAME = os.getenv("BOT_NAME", f"VWAP_{BOT_ID}")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
 IS_TESTNET = os.getenv("IS_TESTNET", "True").lower() == "true"
+TIMEFRAME="1m"
 
 # Símbolo y Parámetros
 SYMBOL = os.getenv("SYMBOL", "ETHUSDT")

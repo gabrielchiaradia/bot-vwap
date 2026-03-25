@@ -1,57 +1,36 @@
 import time
 from src.config import SYMBOL, BOT_ID, BOT_NAME, TP_RR_RATIO, RISK_PER_TRADE, BAND_MULT
-# Asegurate de tener TIMEFRAME o INTERVALO en tu config (ej: "1m")
-from src.config import TIMEFRAME 
 from src.logger import logger
 from src.exchange import get_client, get_account_status, get_open_position, set_leverage
 from src.strategy import obtener_señal_actual
-from src.execution import ejecutar_apertura_completa, gestionar_resguardo_posicion, sincronizar_realidad_vs_journal
-from src.risk import calculate_position_size, check_drawdown_alert, can_trade
+from src.execution import ejecutar_apertura_completa, gestionar_resguardo_posicion
+from src.risk import calculate_position_size, check_drawdown_alert,can_trade
 from src.live_writer import exportar_dashboard, exportar_status
 from src.notifier import alert_startup
 from src.journal import _load
+from src.execution import ejecutar_apertura_completa, gestionar_resguardo_posicion, sincronizar_realidad_vs_journal
 
-# Importamos el nuevo stream de WebSockets
-from src.websocket_stream import BinanceKlineStream
-
-# Variables globales para el ciclo
-cycle_count = 0
-client = None
 
 def inicializar():
     """Configuración única al arrancar el contenedor."""
     logger.info("="*50)
-    logger.info(f"🚀 Iniciando Bot {BOT_ID} para {SYMBOL} con WebSockets...")
+    logger.info(f"🚀 Iniciando Bot {BOT_ID} para {SYMBOL}...")
     logger.info("="*50)
-    c = get_client()
+    client = get_client()
     
     # Configuración de Exchange inicial
-    set_leverage(c, SYMBOL)
+    set_leverage(client, SYMBOL)
 
     # Notificación de arranque
-    balance_inicial = get_account_status(c)['wallet_balance']
+    balance_inicial = get_account_status(client)['wallet_balance']
     alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, BAND_MULT, balance_inicial)
     
-    return c
+    return client
 
-def ejecutar_ciclo_ws(df_velas, buffer):
-    """
-    Este es el nuevo ciclo.
-    El WebSocket dispara esta función EXACTAMENTE en el milisegundo que cierra la vela.
-    """
-    global cycle_count
-    global client
-    
+def ejecutar_ciclo(client, cycle_count): # Agregamos el cycle_count como parámetro
+    """Ciclo que se repite cada 1 minuto."""
     try:
-        # Log informativo cada 60 ciclos (1 hora)
-        if cycle_count % 60 == 0:
-            logger.info("="*50)
-            logger.info(f"  BOT {BOT_NAME}  R/R: {TP_RR_RATIO} Riesgo por trade: {RISK_PER_TRADE}%")
-            logger.info(f"  Bot corriendo durante {cycle_count} minutos")
-            logger.info("="*50)
-
-        logger.info(f"--- Ciclo {cycle_count} para {SYMBOL} (Cierre detectado via WS) ---")
-        
+        logger.info(f"--- Ciclo {cycle_count} para {SYMBOL} ---")
         # 1. Sincronización de Cuenta y Alertas de Riesgo
         account = get_account_status(client)
         check_drawdown_alert(account['wallet_balance'])
@@ -63,14 +42,11 @@ def ejecutar_ciclo_ws(df_velas, buffer):
         pos_abierta = get_open_position(client, SYMBOL)
         if pos_abierta:
             gestionar_resguardo_posicion(client, SYMBOL)
-            
         # Revisamos si el cortacircuitos diario nos permite operar
         if not can_trade(_load()):
-            logger.warning(f"[{SYMBOL}] Cortacircuitos diario activo. No se operará hoy.")
-            return  
+            return  # Corta el ciclo acá y no analiza señales hasta mañana
 
         # 4. Análisis de Estrategia
-        # (Ver nota abajo sobre esta línea)
         signal, entry_price, std_dev = obtener_señal_actual(client)
 
         # 5. Actualización del Dashboard Live
@@ -79,7 +55,7 @@ def ejecutar_ciclo_ws(df_velas, buffer):
             account['unrealized_pnl'], account['margin_balance'], 
             account['available'], 1 if pos_abierta else 0
         )
-        exportar_dashboard() # Asegurate de no pasar 'client' si tu función exportar_dashboard no lo recibe
+        exportar_dashboard(client)
         
         # 6. Lógica de Disparo
         if signal and not pos_abierta:
@@ -96,36 +72,29 @@ def ejecutar_ciclo_ws(df_velas, buffer):
             if qty > 0:
                 ejecutar_apertura_completa(client, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE)
 
-        cycle_count += 1
-
     except Exception as e:
         logger.error(f"Error crítico en ciclo {SYMBOL}: {e}", exc_info=True)
 
 def main():
-    global client
     # 1. Inicializamos y guardamos el cliente
     client = inicializar()
     
-    # 2. Inicializamos el Stream de Binance
-    logger.info("Conectando al WebSocket de Binance...")
-    stream = BinanceKlineStream(
-        symbol=SYMBOL,
-        interval=TIMEFRAME, # Importado de config (ej: "1m")
-        on_candle_close=ejecutar_ciclo_ws, # El bot ahora es manejado por esta función
-        testnet=False, 
-        buffer_size=300
-    )
-    
-    # 3. Arrancamos el stream en un hilo secundario
-    stream.iniciar()
-    
-    # 4. Loop infinito para mantener vivo el contenedor Docker
-    try:
-        while True:
-            time.sleep(1) # Ya no dormimos 60s, dormimos 1s para no saturar el CPU mientras el WS trabaja de fondo
-    except KeyboardInterrupt:
-        logger.info("Apagando bot...")
-        stream.detener()
+    # 2. Arrancamos el loop infinito
+    cycle_count = 0
+    while True:
+        # Log informativo cada 60 ciclos (1 hora)
+        if cycle_count % 60 == 0:
+            logger.info("="*50)
+            logger.info(f"  BOT {BOT_NAME}  R/R: {TP_RR_RATIO} Riesgo por trade: {RISK_PER_TRADE}%")
+            logger.info(F"  Bot corriendo daunte {cycle_count} minutos")
+            logger.info("="*50)
+        ejecutar_ciclo(client, cycle_count)
+        cycle_count += 1      
+        time.sleep(60)  # Esperamos al cierre del minuto para recalcular bandas
 
 if __name__ == "__main__":
     main()
+
+   
+
+        
