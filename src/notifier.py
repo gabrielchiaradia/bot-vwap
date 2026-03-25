@@ -21,9 +21,22 @@ class TelegramNotifier:
             except Exception as e:
                 logger.warning(f"⚠️ Error Telegram: {e}")
         Thread(target=task, daemon=True).start()
-
+    
     def _tag(self, msg: str) -> str:
         return f"🤖 <b>[{self.bot_tag}]</b>\n{msg}"
+    
+    def alert_startup(self, symbol: str, risk: float, rr: float, multiplier: float, balance: float):
+        msg = self._tag(
+            f"🚀 <b>Bot Iniciado</b>\n"
+            f"───────────────────\n"
+            f"📍 <b>Par:</b> <code>{symbol}</code>\n"
+            f"🛡️ <b>Riesgo:</b> <code>{risk}%</code> | RR: <code>{rr}</code>\n"
+            f"📊 <b>Bands Mult:</b> <code>{multiplier}</code>\n"
+            f"💰 <b>Balance Inicial:</b> <code>{balance:.2f} USDT</code>\n"
+            f"───────────────────\n"
+            f"📡 <i>Escuchando mercado en tiempo real...</i>"
+        )
+        self._send_async(msg)
 
     def alert_trade_open(self, symbol, direction, entry, sl, tp, risk, qty):
         emoji = "🚀" if direction == "LONG" else "📉"
