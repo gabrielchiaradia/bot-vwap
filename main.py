@@ -103,9 +103,10 @@ def ejecutar_ciclo_ws(df_velas, buffer):
                 qty = qty_capped
 
             if qty > 0:
-                ejecutar_apertura_completa(client, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE
-                balance_at_open=account['wallet_balance']   # ¡û agregar esto
-                )
+                ejecutar_apertura_completa(client, SYMBOL, signal, entry_price, sl_price, tp_price, qty, RISK_PER_TRADE,
+                balance_at_open=account['wallet_balance'])
+                
+                
         # ==========================================
         # REPORTE DE ESTADO (Delega todo al notifier)
         # ==========================================

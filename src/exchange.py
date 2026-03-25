@@ -105,18 +105,53 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
         
         if len(exit_orders) < 2:
             logger.warning(f"[{symbol}] Protección incompleta ({len(exit_orders)}/2). Rescatando...")
-            
-            # Mapeo de dirección
+
             side_bot = current_trade.get('direction') or current_trade.get('side')
             side_entry = "BUY" if side_bot == "LONG" else "SELL"
-            
+            close_side = SIDE_SELL if side_entry == "BUY" else SIDE_BUY
+
             qty = float(current_trade['quantity'])
             sl = float(current_trade['sl_price'])
             tp = float(current_trade['tp_price'])
-            
-            # LLAMADA DIRECTA (Sin import)
-            place_sl_tp(client, symbol, side_entry, qty, sl, tp)
-            
+
+            tick = get_tick_size(client, symbol)
+            sl = _round_tick(sl, tick)
+            tp = _round_tick(tp, tick)
+
+            # Identificar qué órdenes faltan por tipo
+            tipos_presentes = {o['type'] for o in exit_orders}
+            tiene_sl = bool({'STOP_MARKET', 'STOP'} & tipos_presentes)
+            tiene_tp = bool({'TAKE_PROFIT_MARKET', 'TAKE_PROFIT'} & tipos_presentes)
+
+            # Colocar solo lo que falta, sin cancelar lo que ya existe
+            if not tiene_sl:
+                try:
+                    client.futures_create_order(
+                        symbol=symbol,
+                        side=close_side,
+                        type=FUTURE_ORDER_TYPE_STOP_MARKET,
+                        stopPrice=sl,
+                        closePosition=True
+                    )
+                    logger.info(f"[{symbol}] SL rescatado en {sl}")
+                except Exception as e:
+                    logger.error(f"[{symbol}] Error rescatando SL: {e}")
+
+            if not tiene_tp:
+                try:
+                    client.futures_create_order(
+                        symbol=symbol,
+                        side=close_side,
+                        type=FUTURE_ORDER_TYPE_LIMIT,
+                        timeInForce=TIME_IN_FORCE_GTC,
+                        price=tp,
+                        quantity=qty,
+                        reduceOnly=True
+                    )
+                    logger.info(f"[{symbol}] TP rescatado en {tp}")
+                except Exception as e:
+                    logger.error(f"[{symbol}] Error rescatando TP: {e}")
+
             logger.info(f"[{symbol}] ✅ Órdenes de protección re-sincronizadas.")
             return True
             
@@ -124,7 +159,7 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
     except Exception as e:
         logger.error(f"Error en verificar_y_rescatar_sl_tp: {e}")
         return False
-        
+    
 def _round_tick(price: float, tick: float) -> float:
     """Redondea el precio al tick size más cercano hacia abajo."""
     import math
@@ -144,15 +179,15 @@ def get_tick_size(client, symbol) -> float:
     except Exception as e:
         logger.warning(f"No se pudo obtener tick size para {symbol}: {e}")
     return 0.1  # fallback seguro para BTC
-    
+
 def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
-    """Coloca las órdenes de protección una vez entramos al trade"""
+    """Coloca las órdenes de protección una vez entramos al trade."""
     try:
         tick = get_tick_size(client, symbol)
         close_side = SIDE_SELL if side == SIDE_BUY else SIDE_BUY
         sl_price = _round_tick(float(sl_price), tick)
         tp_price = _round_tick(float(tp_price), tick)
-        
+
         # --- LIMPIEZA SELECTIVA: solo cancela órdenes de salida existentes ---
         # No cancelamos todo para no borrar órdenes de otro bot en la misma cuenta
         open_orders = client.futures_get_open_orders(symbol=symbol)
@@ -163,7 +198,7 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
                     client.futures_cancel_order(symbol=symbol, orderId=o['orderId'])
                 except Exception:
                     pass  # Si ya se ejecutó, ignoramos
-        
+
         # Stop Loss (Market)
         client.futures_create_order(
             symbol=symbol,
@@ -172,7 +207,7 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
             stopPrice=sl_price,
             closePosition=True
         )
-        
+
         # Take Profit (Limit)
         client.futures_create_order(
             symbol=symbol,
@@ -183,7 +218,7 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
             quantity=qty,
             reduceOnly=True
         )
-        logger.info(f"[{BOT_ID}] ✅ Protección colocada: SL {sl_price} | TP {tp_price}")
+        logger.info(f"[{BOT_ID}] ✅ Protección colocada: SL {sl_price} | TP {tp_price} (tick {tick})")
     except Exception as e:
         logger.error(f"Error colocando SL/TP: {e}")
 

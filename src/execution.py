@@ -138,6 +138,13 @@ def sincronizar_realidad_vs_journal(client, symbol):
                 if not historial:
                     logger.warning(f"[{symbol}] Sin historial de trades en Binance")
                     return
+
+                # Verificar que realmente hubo un cierre (realizedPnl != 0)
+                # Si no hay, la orden LIMIT no se llenó todavía — no es un cierre real
+                hay_cierre = any(float(op.get('realizedPnl', 0)) != 0 for op in historial)
+                if not hay_cierre:
+                    logger.info(f"[{symbol}] Historial sin PnL realizado — orden aun no ejecutada. Ignorando cierre falso.")
+                    return
         
                 # Filtrar solo los trades de ESTA posición:
                 # Los que tienen el mismo side que la apertura (entry)
