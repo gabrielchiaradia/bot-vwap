@@ -405,7 +405,7 @@ def main():
             print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}Risk/Reward: {s['rr']}{K.X}] "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}${K.X} "
+                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
                   f"DD={s['max_drawdown']}%")
         print(f"{K.C}{'═'*62}{K.X}")    
         ranked = sorted(all_summaries, key=lambda x: x["pnl_total"], reverse=True)
