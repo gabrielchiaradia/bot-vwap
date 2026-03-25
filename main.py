@@ -123,7 +123,7 @@ def main():
     )
     
     # 3. Arrancamos el stream en un hilo secundario
-    stream.iniciar(df_ltf_hist=df_historico)
+    stream.iniciar(df_historico)
     
     # 4. Loop infinito para mantener vivo el contenedor Docker
     try:
