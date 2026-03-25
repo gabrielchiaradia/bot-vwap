@@ -402,11 +402,13 @@ def main():
             pf_c = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
             pnl_c = K.G if s['pnl_total'] >= 0 else K.R
             medal = " 🥇" if idx == 1 else " 🥈" if idx == 2 else " 🥉" if idx == 3 else f" {idx}."
-            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}Risk/Reward: {s['rr']}{K.X}] "
+            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}R/R: {s['rr']}{K.X}] "
+                  f"Band={s['band_mult']}{K.X} "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
-                  f"DD={s['max_drawdown']}%")
+                  f"PnL ={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
+                  f"DD={s['max_drawdown']}%{K.X}"
+                  f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")    
         ranked = sorted(all_summaries, key=lambda x: x["pnl_total"], reverse=True)
         print(f"\n{K.C}{'═'*62}{K.X}")
@@ -420,7 +422,7 @@ def main():
                   f"Band={s['band_mult']}{K.X} "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
+                  f"PnL ={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
                   f"DD={s['max_drawdown']}%{K.X} "
                   f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")
