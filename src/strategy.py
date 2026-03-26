@@ -133,22 +133,29 @@ def get_vwap_signals(df):
     
     # Lógica SHORT
     if last['high'] >= last['upper'] and last['close'] < (last['upper'] * 1.002):
+        tp = last['vwap']
+        # CAMBIO CLAVE: Entramos en la banda, no en el cierre
+        entry_price = last['upper'] 
+        
         reward = abs(entry_price - tp)
         profit_pct = (reward / entry_price) * 100
-        # Evitamos entrar si el rebote fue tan grande que nos dejó sin espacio para un buen SL
-        if profit_pct > 0.15: # Mismo límite que tenés oculto en el backtest (min_profit_pct)
+        if profit_pct > 0.15:
             return "SHORT", entry_price, tp
         else:
-            print(f"Bloqueo SHORT: Premio muy chico ({profit_pct:.3f}%), SL sería peligroso.")
+            print(f"Bloqueo SHORT: Premio muy chico ({profit_pct:.3f}%)")
 
     # Lógica LONG
     if last['low'] <= last['lower'] and last['close'] > (last['lower'] * 0.998):
+        tp = last['vwap']
+        # CAMBIO CLAVE: Entramos en la banda, no en el cierre
+        entry_price = last['lower'] 
+        
         reward = abs(tp - entry_price)
         profit_pct = (reward / entry_price) * 100
         if profit_pct > 0.15:
             return "LONG", entry_price, tp
         else:
-            print(f"Bloqueo LONG: Premio muy chico ({profit_pct:.3f}%), SL sería peligroso.")
+            print(f"Bloqueo LONG: Premio muy chico ({profit_pct:.3f}%)")
     
     return None, None, None
     

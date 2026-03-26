@@ -57,7 +57,7 @@ def can_trade(trades_historicos):
         
         for t in trades_historicos:
             # 1. Verificamos que sea un trade de HOY, de ESTE BOT y que esté CERRADO
-            is_today = t.get('close_time', '').startswith(now)
+            is_today = str(t.get('close_time')).startswith(now)
             is_this_bot = t.get('bot_id') in [BOT_ID, "MANUAL"]
             is_closed = t.get('status') == 'CLOSED'
             
