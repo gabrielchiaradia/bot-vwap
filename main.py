@@ -23,7 +23,7 @@ def inicializar():
     c = get_client()
     set_leverage(c, SYMBOL)
     logger.info("Limpiando órdenes huérfanas previas...")
-    cancel_all_open_orders(c, SYMBOL)    
+    cancel_all_open_orders(client, SYMBOL)    
     balance_inicial = get_account_status(c)['wallet_balance']
     notifier = crear_notifier()
     notifier.alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, BAND_MULT, balance_inicial)
