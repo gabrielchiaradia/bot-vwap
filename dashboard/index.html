@@ -615,54 +615,6 @@ function renderStatus(st) {
   }
 }
 
-<!-- function renderPositions(data) {
-  const positions = Array.isArray(data) ? data : (data.positions || []);
-  
-  document.getElementById('posCount').textContent = positions.length;
-  
-  if (!positions.length) { 
-    document.getElementById('posBody').innerHTML = '<div class="pos-empty">Sin posiciones abiertas</div>'; 
-    return; 
-  }
-  
-  // 1. Agregamos "Risk" y "uPnL" a las cabeceras de la tabla
-  let html = '<div style="overflow-x:auto"><div class="pos-row" style="font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)"><span>Símbolo</span><span>Dir</span><span>Entry</span><span>SL</span><span>TP</span><span>Risk</span><span>uPnL</span><span>Abierto</span><span>Bot</span></div>';
-  
-  positions.forEach(p => {
-    const dirC = p.direction === 'LONG' ? 'badge-long' : 'badge-short';
-    
-    const timeVal = p.entry_time || p.open_time || p.opened_at;
-    const opened = timeVal ? new Date(timeVal).toLocaleString('es-AR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
-    
-    const entry = Number(p.entry_price || p.entry || 0).toFixed(2);
-    const sl = Number(p.sl_price || p.sl || 0).toFixed(2);
-    const tp = Number(p.tp_price || p.tp || 0).toFixed(2);
-    const botName = p.bot_id || p.bot || '—';
-
-    // 2. Procesamos el Riesgo
-    const risk = p.risk_pct ? `${p.risk_pct}%` : '—';
-
-    // 3. Procesamos el PnL con colores dinámicos (Verde si gana, Rojo si pierde)
-    const pnlNum = Number(p.pnl || p.unrealized_pnl || 0);
-    const pnlColor = pnlNum >= 0 ? 'var(--green)' : 'var(--red)';
-    const pnlSign = pnlNum > 0 ? '+' : '';
-    const pnlStr = `<span style="color:${pnlColor};font-weight:bold">${pnlSign}${pnlNum.toFixed(2)} USDT</span>`;
-
-    html += `<div class="pos-row">
-               <span style="color:var(--text-strong);font-weight:600">${p.symbol}</span>
-               <span><span class="badge ${dirC}">${p.direction}</span></span>
-               <span>$${entry}</span>
-               <span style="color:var(--red)">$${sl}</span>
-               <span style="color:var(--green)">$${tp}</span>
-               <span style="color:var(--text-strong)">${risk}</span>
-               <span>${pnlStr}</span>
-               <span style="color:var(--muted)">${opened}</span>
-               <span style="color:var(--muted);font-size:10px">${botName}</span>
-             </div>`;
-  });
-  
-  document.getElementById('posBody').innerHTML = html + '</div>';
-} -->
 function renderPositions(data) {
   _openPositions = Array.isArray(data) ? data : (data.positions || []);
   
