@@ -3,7 +3,7 @@ import time
 from src.config import SYMBOL, BOT_ID, BOT_NAME, TP_RR_RATIO, RISK_PER_TRADE, BAND_MULT
 from src.config import TIMEFRAME, LEVERAGE
 from src.logger import logger
-from src.exchange import get_client, get_account_status, get_open_position, set_leverage
+from src.exchange import get_client, get_account_status, get_open_position, set_leverage, cancel_all_open_orders
 from src.strategy import obtener_señal_actual
 from src.execution import ejecutar_apertura_completa, gestionar_resguardo_posicion, sincronizar_realidad_vs_journal
 from src.risk import calculate_position_size, check_drawdown_alert, can_trade
