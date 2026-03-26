@@ -41,7 +41,7 @@ class TelegramNotifier:
         )
         self._send_async(msg)
 
-    def alert_trade_open(self, symbol, direction, entry, sl, tp, risk, qty):
+    def alert_trade_open(self, symbol, direction, entry, sl, tp, qty, risk_pct):
         emoji = "🚀" if direction == "LONG" else "📉"
         # Calculamos la distancia porcentual al TP/SL para dar más info
         dist_tp = abs((tp - entry) / entry) * 100
@@ -56,7 +56,7 @@ class TelegramNotifier:
             f"📥 <b>Entrada:</b> <code>{entry:.2f}</code>\n"
             f"🎯 <b>Take Profit:</b> <code>{tp:.2f}</code> (<i>+{dist_tp:.1f}%</i>)\n"
             f"🛑 <b>Stop Loss:</b> <code>{sl:.2f}</code>\n"
-            f"🛡️ <b>Riesgo:</b> <code>{risk}%</code> del Capital\n"
+            f"🛡️ <b>Riesgo:</b> <code>{risk_pct}%</code> del Capital\n"
             f"───────────────────\n"
             f"⏳ <i>Esperando ejecución de órdenes...</i>"
         )
