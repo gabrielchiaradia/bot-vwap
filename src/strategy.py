@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from datetime import datetime, timezone
 from src.config import SYMBOL, BAND_MULT
 from src.logger import logger
 
@@ -86,6 +87,25 @@ def get_vwap_signals(df):
     # Ignorar las primeras 120 velas del día porque las bandas están colapsadas.
     if last['bar_num'] < 120:
         return None, None, None
+        
+    # --- 1. FILTRO DE COOLDOWN (Frena el sobre-operaje) ---
+    try:
+        from src.journal import _load
+        from src.config import BOT_ID
+        trades = _load()
+        mis_trades = [t for t in trades if t.get('bot_id') == BOT_ID and t.get('status') == 'CLOSED']
+        if mis_trades:
+            ultimo_trade = mis_trades[-1]
+            if ultimo_trade.get('close_time'):
+                last_time = datetime.fromisoformat(ultimo_trade['close_time'])
+                now = datetime.now(timezone.utc)
+                minutos_pasados = (now - last_time).total_seconds() / 60.0
+                if minutos_pasados < 10:
+                    print(f"Bloqueo: Cooldown activo. Faltan {10 - minutos_pasados:.1f} minutos para operar.")
+                    return None, None, None
+    except Exception as e:
+        pass # Si hay error leyendo el journal, ignorar y seguir    
+        
     # FILTROS ANTI-LATIGAZOS (VOLATILIDAD
     # 1. Cálculo de salto de VWAP (comparamos la vela actual con la de hace 3 periodos)
     vwap_now = last['vwap']
@@ -107,19 +127,28 @@ def get_vwap_signals(df):
             print(f"Bloqueo: Expansión violenta de bandas (Ancho: {last['band_width']:.2f})")
             return None, None, None
     
-    # Lógica SHORT (Clon del backtest): 
-    # El máximo (high) tocó o superó la banda superior y el cierre no se escapó demasiado.
+    # --- 2. FILTRO DE REWARD (Protege Stop Loss) ---
+    tp = last['vwap']
+    entry_price = last['close']
+    
+    # Lógica SHORT
     if last['high'] >= last['upper'] and last['close'] < (last['upper'] * 1.002):
-        # Retorna: Dirección, Precio de Entrada (Cierre de la vela), y el VWAP (que es tu Take Profit en el backtest)
-																										   
-        return "SHORT", last['close'], last['vwap']
-        
-    # Lógica LONG (Clon del backtest):
-    # El mínimo (low) tocó o perforó la banda inferior y el cierre no se hundió demasiado.
+        reward = abs(entry_price - tp)
+        profit_pct = (reward / entry_price) * 100
+        # Evitamos entrar si el rebote fue tan grande que nos dejó sin espacio para un buen SL
+        if profit_pct > 0.15: # Mismo límite que tenés oculto en el backtest (min_profit_pct)
+            return "SHORT", entry_price, tp
+        else:
+            print(f"Bloqueo SHORT: Premio muy chico ({profit_pct:.3f}%), SL sería peligroso.")
+
+    # Lógica LONG
     if last['low'] <= last['lower'] and last['close'] > (last['lower'] * 0.998):
-        return "LONG", last['close'], last['vwap']
+        reward = abs(tp - entry_price)
+        profit_pct = (reward / entry_price) * 100
+        if profit_pct > 0.15:
+            return "LONG", entry_price, tp
+        else:
+            print(f"Bloqueo LONG: Premio muy chico ({profit_pct:.3f}%), SL sería peligroso.")
     
     return None, None, None
-        
-  
     

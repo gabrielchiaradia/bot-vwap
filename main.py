@@ -22,6 +22,8 @@ def inicializar():
     logger.info("="*50)
     c = get_client()
     set_leverage(c, SYMBOL)
+    logger.info("Limpiando órdenes huérfanas previas...")
+    cancel_all_open_orders(c, SYMBOL)    
     balance_inicial = get_account_status(c)['wallet_balance']
     notifier = crear_notifier()
     notifier.alert_startup(SYMBOL, RISK_PER_TRADE, TP_RR_RATIO, BAND_MULT, balance_inicial)
@@ -45,7 +47,7 @@ def ejecutar_ciclo_ws(df_velas, buffer):
 
         # 1. Sincronizacion de cuenta y alertas de riesgo
         account = get_account_status(client)
-        check_drawdown_alert(account['wallet_balance'])
+        check_drawdown_alert(account['wallet_balance'], cycle_count)
 
         # 2. Auditoria: sincronizar PnL real y detectar trades manuales
         sincronizar_realidad_vs_journal(client, SYMBOL)
@@ -56,7 +58,8 @@ def ejecutar_ciclo_ws(df_velas, buffer):
             gestionar_resguardo_posicion(client, SYMBOL)
 
         # Cortacircuitos diario
-        if not can_trade(_load()):
+        historial = _load()
+        if not can_trade(historial):
             logger.warning(f"[{SYMBOL}] Cortacircuitos diario activo. No se operara hoy.")
             return
 

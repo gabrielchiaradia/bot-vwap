@@ -221,6 +221,10 @@ def sincronizar_realidad_vs_journal(client, symbol):
                 t['status'] = 'CLOSED'
                 t['close_time'] = ahora
                 calcular_pnl_y_fees_final(t) # <--- LLAMADA A LA LÓGICA NUEVA
+                # --- Limpiamos ordenes huerfanas ---
+                logger.info("Limpiando órdenes huérfanas previas...")
+                cancel_all_open_orders(c, SYMBOL)
+                # --------------------
                 modified = True
 
         # ==========================================
@@ -257,6 +261,10 @@ def sincronizar_realidad_vs_journal(client, symbol):
                 t['status'] = 'CLOSED'
                 t['close_time'] = ahora
                 calcular_pnl_y_fees_final(t) # <--- TAMBIÉN CALCULAMOS ACÁ
+                # ---> Limpiamos ordenes huerfanas <---
+                cancel_all_open_orders(client, symbol)
+                logger.info(f"[{symbol}] 🧹 Limpieza de órdenes por cambio de dirección manual.")
+                # --------------------
                 modified = True
 
         if modified:

@@ -53,18 +53,29 @@ def can_trade(trades_historicos):
         now = datetime.now(timezone.utc).date().isoformat()
         
         # Filtramos los trades de HOY que hayan resultado en PÉRDIDA
-        losses_today = len([t for t in trades_historicos 
-                            if t.get('result') == 'LOSS' 
-                            and t.get('close_time', '').startswith(now)
-                            and t.get('bot_id') == BOT_ID])
+        losses_today = 0
+        
+        for t in trades_historicos:
+            # 1. Verificamos que sea un trade de HOY, de ESTE BOT y que esté CERRADO
+            is_today = t.get('close_time', '').startswith(now)
+            is_this_bot = t.get('bot_id') in [BOT_ID, "MANUAL"]
+            is_closed = t.get('status') == 'CLOSED'
+            
+            if is_today and is_this_bot and is_closed:
+                # 2. En lugar de buscar 'result', leemos directamente si el PNL fue negativo
+                pnl = t.get('pnl_usdt', 0.0)
+                if pnl < 0:
+                    losses_today += 1
         
         if losses_today >= 2:
             logger.warning(f"[{BOT_ID}] 🛑 Cortacircuitos: Límite de {losses_today} pérdidas diarias alcanzado.")
             return False
             
         return True
+    
     except Exception as e:
         logger.error(f"Error evaluando can_trade: {e}")
+        # Por seguridad, si hay un error crítico leyendo, frenamos el bot
         return False
 
 def calculate_position_size(balance, risk_pct, entry_price, sl_price):
@@ -95,8 +106,7 @@ def calculate_position_size(balance, risk_pct, entry_price, sl_price):
     except Exception as e:
         logger.error(f"Error calculando tamaño de posición: {e}")
         return 0.0    
-        
-def check_drawdown_alert(current_balance):
+def check_drawdown_alert(current_balance, cycle_count):
     """Avisa por Telegram si la cuenta cae más del 10% del capital inicial DEL DÍA"""
     try:
         # Aquí entra la magia: buscamos con cuánto arrancamos hoy
@@ -106,8 +116,9 @@ def check_drawdown_alert(current_balance):
         
         drop = (initial_balance - current_balance) / initial_balance
         
-        if drop >= 0.10: # 10% de caída
-            notifier = crear_notifier()
-            notifier._send_async(f"🚨 <b>ALERTA DE DRAWDOWN DIARIO</b>\nLa cuenta cayó {drop*100:.1f}% hoy.\nInicio del día: {initial_balance:.2f} USDT\nActual: {current_balance:.2f} USDT")
+        if cycle_count % 60 == 0:
+            if drop >= 0.10: # 10% de caída
+                notifier = crear_notifier()
+                notifier._send_async(f"🚨 <b>ALERTA DE DRAWDOWN DIARIO</b>\nLa cuenta cayó {drop*100:.1f}% hoy.\nInicio del día: {initial_balance:.2f} USDT\nActual: {current_balance:.2f} USDT")
     except Exception as e:
         logger.error(f"Error en alerta de drawdown: {e}")

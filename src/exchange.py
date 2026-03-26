@@ -54,12 +54,10 @@ def get_account_status(client):
 def cancel_all_open_orders(client, symbol):
     """Cancela todas las órdenes LIMIT abiertas para un símbolo"""
     try:
-        orders = client.futures_get_open_orders(symbol=symbol)
-        if orders:
-            client.futures_cancel_all_open_orders(symbol=symbol)
-            logger.debug(f"[{BOT_ID}] Órdenes abiertas canceladas en {symbol}")
+        client.futures_cancel_all_open_orders(symbol=symbol)
+        logger.debug(f"[{BOT_ID}] Órdenes abiertas canceladas en {symbol}")
     except Exception as e:
-        logger.error(f"Error cancelando órdenes: {e}")
+        pass
 
 def place_limit_order(client, symbol, side, price, quantity):
     """Coloca una orden LIMIT (Maker estricto). Si el precio ya cruzó, aborta."""
@@ -104,7 +102,7 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
         exit_orders = [
             o for o in open_orders
             if o['type'] in ['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'TAKE_PROFIT', 'STOP']
-            or (o['type'] == 'LIMIT' and o.get('reduceOnly') == True)
+            or (o['type'] == 'LIMIT' and (o.get('reduceOnly') == True or o.get('closePosition') == True))
         ]
         
         if len(exit_orders) < 2:
@@ -125,7 +123,7 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
             # Identificar qué órdenes faltan por tipo
             tipos_presentes = {o['type'] for o in exit_orders}
             tiene_sl = any(
-                o['type'] in {'STOP_MARKET', 'STOP'} and o.get('reduceOnly') == True
+                o['type'] in {'STOP_MARKET', 'STOP'} and (o.get('reduceOnly') == True or o.get('closePosition') == True)
                 for o in open_orders
             )
             tiene_tp = bool({'TAKE_PROFIT_MARKET', 'TAKE_PROFIT'} & tipos_presentes) \
