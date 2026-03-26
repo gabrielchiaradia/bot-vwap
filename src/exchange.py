@@ -62,7 +62,8 @@ def cancel_all_open_orders(client, symbol):
 def place_limit_order(client, symbol, side, price, quantity):
     """Coloca una orden LIMIT (Maker estricto). Si el precio ya cruzó, aborta."""
     try:
-        price = round(float(price), 2) 
+        tick = get_tick_size(client, symbol)
+        price = _round_tick(float(price), tick)
         quantity = round(float(quantity), 3)
         
         # Usamos Post Only para asegurar que siempre seamos MAKER (comisiones bajas)
