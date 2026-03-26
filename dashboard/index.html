@@ -233,7 +233,7 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
     <button class="mode-tab active" id="tab-live" onclick="switchMode('live')">● Live</button>
     <button class="mode-tab" id="tab-backtest" onclick="switchMode('backtest')">⬡ Backtest</button>
     <select id="bot-selector" class="mode-tab class="nav-btn" onchange="cambiarBotSeleccionado(this.value)" style="cursor: pointer; appearance: auto;">
-      <option value="ETH">💎 Bot ETH</option>
+      <option value="BTC">💎 Bot BTC</option>
       <option value="SOL">🔥 Bot SOL</option>
     </select>
   </div>
@@ -556,7 +556,7 @@ function animateRefreshBar() {
 //  LIVE: FETCH
 // ══════════════════════════════════════════════════════════
 // 1. Variable global (afuera de la función) para saber qué bot estamos mirando
-let botActivo = 'ETH'; 
+let botActivo = 'BTC'; 
 
 // 2. Función que se ejecuta cuando tocás el desplegable
 function cambiarBotSeleccionado(nuevoBot) {
@@ -569,7 +569,7 @@ function cambiarBotSeleccionado(nuevoBot) {
 async function fetchLiveData() {
   try {
     const [trRes, posRes, stRes] = await Promise.allSettled([
-      // Acá ya toma el valor nuevo ('ETH' o 'SOL') automáticamente
+      // Acá ya toma el valor nuevo ('BTC' o 'SOL') automáticamente
       fetch(`/data/dashboard_trades_${botActivo}.json?t=` + Date.now()),
       fetch(`/data/open_positions_total.json?t=` + Date.now()),
       fetch(`/data/bot_status_${botActivo}.json?t=` + Date.now()),
@@ -993,8 +993,8 @@ function cargarDemo() {
   const rng=(a,b)=>Math.random()*(b-a)+a;let cap=1000;const trades=[];let f=new Date('2025-06-01');
   for(let i=0;i<120;i++){f=new Date(f.getTime()+rng(2,10)*36e5);const dir=Math.random()<.5?'LONG':'SHORT';const bias=dir==='LONG'?'BULL':'BEAR';const win=Math.random()<.49;const en=rng(2800,4200);const atr=rng(15,50);const sd=atr*1.5;const sl=dir==='LONG'?en-sd:en+sd;const tp=dir==='LONG'?en+sd*1.5:en-sd*1.5;const ex=win?tp:sl;const q=(cap*.003)/sd;const pnl=dir==='LONG'?(ex-en)*q:(en-ex)*q;cap+=pnl;
   const openTime=f.toISOString();const closeTime=new Date(f.getTime()+rng(5,180)*60000).toISOString();
-  trades.push({time:openTime,close_time:closeTime,symbol:'ETHUSDT',direction:dir,entry:+en.toFixed(2),sl:+sl.toFixed(2),tp:+tp.toFixed(2),exit:+ex.toFixed(2),result:win?'WIN':'LOSS',pnl:+pnl.toFixed(4),capital:+cap.toFixed(2),score:Math.round(rng(60,100)),vol_ratio:+rng(1.2,4).toFixed(2),rsi:+rng(30,70).toFixed(1),bias,ob_zone:`${rng(2800,4200).toFixed(0)}-${rng(2800,4200).toFixed(0)}`})}
-  const s=calcSummary(trades);s.symbol='ETHUSDT';s.timeframe='1m+5m';s.dias=90;s.label='demo';
+  trades.push({time:openTime,close_time:closeTime,symbol:'BTCUSDT',direction:dir,entry:+en.toFixed(2),sl:+sl.toFixed(2),tp:+tp.toFixed(2),exit:+ex.toFixed(2),result:win?'WIN':'LOSS',pnl:+pnl.toFixed(4),capital:+cap.toFixed(2),score:Math.round(rng(60,100)),vol_ratio:+rng(1.2,4).toFixed(2),rsi:+rng(30,70).toFixed(1),bias,ob_zone:`${rng(2800,4200).toFixed(0)}-${rng(2800,4200).toFixed(0)}`})}
+  const s=calcSummary(trades);s.symbol='BTCUSDT';s.timeframe='1m+5m';s.dias=90;s.label='demo';
   _allVariants=[{summary:s,trades}];
   document.getElementById('upload-zone').style.display='none';document.getElementById('dashboard-bt').style.display='block';
   seleccionarVariante(0);
