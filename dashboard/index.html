@@ -617,26 +617,25 @@ function renderStatus(st) {
 
 function renderPositions(data) {
   _openPositions = Array.isArray(data) ? data : (data.positions || []);
-  
+
   document.getElementById('posCount').textContent = _openPositions.length;
-  
-  if (!_openPositions.length) { 
-    document.getElementById('posBody').innerHTML = '<div class="pos-empty">Sin posiciones abiertas</div>'; 
+
+  if (!_openPositions.length) {
+    document.getElementById('posBody').innerHTML = '<div class="pos-empty">Sin posiciones abiertas</div>';
     connectPriceWebSocket(new Set()); // Desconectar WS si no hay trades
-    return; 
+    return;
   }
 
   // 1. Extraer símbolos únicos y conectar WebSocket
   const symbols = new Set(_openPositions.map(p => p.symbol));
   connectPriceWebSocket(symbols);
-  
+
   let html = '<div style="overflow-x:auto"><div class="pos-row" style="font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)"><span>Símbolo</span><span>Dir</span><span>Entry / Live</span><span>SL</span><span>TP</span><span>Risk</span><span>uPnL</span><span>Abierto</span><span>Bot</span></div>';
-  
+
   _openPositions.forEach((p, i) => {
     const dirC = p.direction === 'LONG' ? 'badge-long' : 'badge-short';
     const timeVal = p.entry_time || p.open_time || p.opened_at;
     const opened = timeVal ? new Date(timeVal).toLocaleString('es-AR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
-    
     const entry = Number(p.entry_price || p.entry || 0).toFixed(2);
     const sl = Number(p.sl_price || p.sl || 0).toFixed(2);
     const tp = Number(p.tp_price || p.tp || 0).toFixed(2);
@@ -664,7 +663,7 @@ function renderPositions(data) {
                <span style="color:var(--muted);font-size:10px">${botName}</span>
              </div>`;
   });
-  
+
   document.getElementById('posBody').innerHTML = html + '</div>';
 
   // Si ya tenemos precios cacheados del WS, actualizamos de inmediato el HTML recién creado
