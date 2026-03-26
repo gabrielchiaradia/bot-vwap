@@ -62,11 +62,15 @@ def cancel_all_open_orders(client, symbol):
 def place_limit_order(client, symbol, side, price, quantity):
     """Coloca una orden LIMIT (Maker estricto). Si el precio ya cruzó, aborta."""
     try:
+        # 1. Redondeo dinámico de PRECIO (Tick Size)
         tick = get_tick_size(client, symbol)
         price = _round_tick(float(price), tick)
-        quantity = round(float(quantity), 3)
         
-        # Usamos Post Only para asegurar que siempre seamos MAKER (comisiones bajas)
+        # 2. Redondeo dinámico de CANTIDAD (Step Size)
+        step = get_step_size(client, symbol)
+        quantity = _round_tick(float(quantity), step)
+        
+        # 3. Enviar la orden
         order = client.futures_create_order(
             symbol=symbol,
             side=side,
@@ -187,6 +191,19 @@ def get_tick_size(client, symbol) -> float:
     except Exception as e:
         logger.warning(f"No se pudo obtener tick size para {symbol}: {e}")
     return 0.1  # fallback seguro para BTC
+
+def get_step_size(client, symbol) -> float:
+    """Obtiene el step size (salto de cantidad) del símbolo desde Binance."""
+    try:
+        info = client.futures_exchange_info()
+        for s in info['symbols']:
+            if s['symbol'] == symbol:
+                for f in s['filters']:
+                    if f['filterType'] == 'LOT_SIZE':
+                        return float(f['stepSize'])
+    except Exception as e:
+        logger.warning(f"No se pudo obtener step size para {symbol}: {e}")
+    return 0.001  # fallback por defecto
 
 def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
     """Coloca las órdenes de protección una vez entramos al trade."""
