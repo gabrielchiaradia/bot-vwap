@@ -223,7 +223,7 @@ def sincronizar_realidad_vs_journal(client, symbol):
                 calcular_pnl_y_fees_final(t) # <--- LLAMADA A LA LÓGICA NUEVA
                 # --- Limpiamos ordenes huerfanas ---
                 logger.info("Limpiando órdenes huérfanas previas...")
-                cancel_all_open_orders(client, SYMBOL)
+                cancel_all_open_orders(client, symbol)
                 # --------------------
                 modified = True
 
