@@ -387,11 +387,6 @@ let _liveTradesFiltered = null; // null = sin filtro
 let _refreshTimer = null;
 let _refreshInterval = 30;
 let _isOnServer = false;
-// WebSockets para Precios en Vivo
-let _priceWs = null;
-let _subscribedSymbols = new Set();
-let _livePrices = {};
-let _openPositions = [];
 
 // Backtest
 let _allVariants = [], _activeIdx = 0, _origTrades = [];
@@ -615,7 +610,7 @@ function renderStatus(st) {
   }
 }
 
-<!-- function renderPositions(data) {
+function renderPositions(data) {
   const positions = Array.isArray(data) ? data : (data.positions || []);
   
   document.getElementById('posCount').textContent = positions.length;
@@ -662,62 +657,8 @@ function renderStatus(st) {
   });
   
   document.getElementById('posBody').innerHTML = html + '</div>';
-} -->
-function renderPositions(data) {
-  _openPositions = Array.isArray(data) ? data : (data.positions || []);
-  
-  document.getElementById('posCount').textContent = _openPositions.length;
-  
-  if (!_openPositions.length) { 
-    document.getElementById('posBody').innerHTML = '<div class="pos-empty">Sin posiciones abiertas</div>'; 
-    connectPriceWebSocket(new Set()); // Desconectar WS si no hay trades
-    return; 
-  }
-
-  // 1. Extraer símbolos únicos y conectar WebSocket
-  const symbols = new Set(_openPositions.map(p => p.symbol));
-  connectPriceWebSocket(symbols);
-  
-  let html = '<div style="overflow-x:auto"><div class="pos-row" style="font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)"><span>Símbolo</span><span>Dir</span><span>Entry / Live</span><span>SL</span><span>TP</span><span>Risk</span><span>uPnL</span><span>Abierto</span><span>Bot</span></div>';
-  
-  _openPositions.forEach((p, i) => {
-    const dirC = p.direction === 'LONG' ? 'badge-long' : 'badge-short';
-    const timeVal = p.entry_time || p.open_time || p.opened_at;
-    const opened = timeVal ? new Date(timeVal).toLocaleString('es-AR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
-    
-    const entry = Number(p.entry_price || p.entry || 0).toFixed(2);
-    const sl = Number(p.sl_price || p.sl || 0).toFixed(2);
-    const tp = Number(p.tp_price || p.tp || 0).toFixed(2);
-    const botName = p.bot_id || p.bot || '—';
-    const risk = p.risk_pct ? `${p.risk_pct}%` : '—';
-
-    // Guardamos el PnL inicial que viene del JSON
-    const pnlNum = Number(p.pnl || p.unrealized_pnl || 0);
-    const pnlColor = pnlNum >= 0 ? 'var(--green)' : 'var(--red)';
-    const pnlSign = pnlNum > 0 ? '+' : '';
-    
-    // CLAVE: Agregamos pos-pnl-val-i
-    const pnlStr = `<span id="pos-pnl-val-${i}" style="color:${pnlColor};font-weight:bold">${pnlSign}${pnlNum.toFixed(2)} USDT</span>`;
-
-    // CLAVE: Agregamos pos-price-i
-    html += `<div class="pos-row">
-               <span style="color:var(--text-strong);font-weight:600">${p.symbol}</span>
-               <span><span class="badge ${dirC}">${p.direction}</span></span>
-               <span id="pos-price-${i}">$${entry}</span>
-               <span style="color:var(--red)">$${sl}</span>
-               <span style="color:var(--green)">$${tp}</span>
-               <span style="color:var(--text-strong)">${risk}</span>
-               <span>${pnlStr}</span>
-               <span style="color:var(--muted)">${opened}</span>
-               <span style="color:var(--muted);font-size:10px">${botName}</span>
-             </div>`;
-  });
-  
-  document.getElementById('posBody').innerHTML = html + '</div>';
-
-  // Si ya tenemos precios cacheados del WS, actualizamos de inmediato el HTML recién creado
-  if (Object.keys(_livePrices).length > 0) updatePnLDisplay();
 }
+
 // ══════════════════════════════════════════════════════════
 //  LIVE: RENDER
 // ══════════════════════════════════════════════════════════
@@ -1064,77 +1005,6 @@ function cargarDemo() {
 // ══════════════════════════════════════════════════════════
 function toggleTheme(){const c=document.documentElement.getAttribute('data-theme')||'dark';const n=c==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('scalp-theme',n);document.getElementById('theme-btn').textContent=n==='dark'?'🌓 Tema Claro':'☀️ Tema Oscuro';TC=gTC();if(_liveData)renderLive(_liveData);if(_allVariants.length)seleccionarVariante(_activeIdx)}
 (function(){const s=localStorage.getItem('scalp-theme');if(s){document.documentElement.setAttribute('data-theme',s);const b=document.getElementById('theme-btn');if(b)b.textContent=s==='dark'?'🌓 Tema Claro' : '☀️ Tema Oscuro'}})();
-
-function connectPriceWebSocket(symbols) {
-  const symKey = [...symbols].sort().join(',');
-  const oldKey = [..._subscribedSymbols].sort().join(',');
-  
-  // No reconectar si ya estamos escuchando los mismos pares
-  if (_priceWs && symKey === oldKey && _priceWs.readyState === WebSocket.OPEN) return;
-
-  if (_priceWs) { _priceWs.close(); _priceWs = null; }
-  if (symbols.size === 0) return;
-
-  _subscribedSymbols = new Set(symbols);
-  const streams = [...symbols].map(s => `${s.toLowerCase()}@ticker`).join('/');
-  const url = `wss://stream.binance.com:9443/ws/${streams}`;
-
-  try {
-    _priceWs = new WebSocket(url);
-    _priceWs.onmessage = (evt) => {
-      try {
-        const d = JSON.parse(evt.data);
-        if (d.s && d.c) {
-          _livePrices[d.s] = parseFloat(d.c); // Precio actual de Binance
-          updatePnLDisplay();                 // Forzamos el recálculo
-        }
-      } catch {}
-    };
-    _priceWs.onclose = () => {
-      // Reconectar automáticamente si se cae
-      setTimeout(() => { 
-        if (_openPositions.length > 0) connectPriceWebSocket(_subscribedSymbols); 
-      }, 5000);
-    };
-    _priceWs.onerror = () => { _priceWs.close(); };
-  } catch (e) {
-    console.error("Error conectando a WS Binance:", e);
-  }
-}
-
-function updatePnLDisplay() {
-  _openPositions.forEach((p, i) => {
-    const price = _livePrices[p.symbol];
-    if (!price) return;
-
-    const pnlEl = document.getElementById(`pos-pnl-val-${i}`);
-    const priceEl = document.getElementById(`pos-price-${i}`);
-    if (!pnlEl) return;
-
-    const isLong = p.direction === 'LONG';
-    const entry = Number(p.entry_price || p.entry || 0);
-    const size = Number(p.quantity || 0); 
-    
-    // Cálculo de PnL flotante local
-    const pnl = isLong ? (price - entry) * size : (entry - price) * size;
-    
-    const isUp = pnl >= 0;
-    const pnlColor = isUp ? 'var(--green)' : 'var(--red)';
-    const pnlSign = isUp ? '+' : '';
-
-    // Escribimos el PnL y cambiamos el color dinámicamente
-    pnlEl.innerHTML = `${pnlSign}${pnl.toFixed(2)} USDT`;
-    pnlEl.style.color = pnlColor;
-    
-    // Extra visual: Mostramos el precio Entry tachado y abajo el precio LIVE parpadeando
-    if (priceEl) {
-       priceEl.innerHTML = `<div style="display:flex; flex-direction:column; line-height:1.2;">
-         <span style="color:var(--muted); font-size:10px; text-decoration:line-through">$${entry.toFixed(2)}</span>
-         <span style="color:var(--accent); font-weight:bold">$${price.toFixed(2)}</span>
-       </div>`;
-    }
-  });
-}
 
 // ── INIT ──
 detectarServidor();
