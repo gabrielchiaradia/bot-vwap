@@ -99,7 +99,6 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
     Verifica si una posición abierta tiene sus órdenes de protección (SL/TP).
     Si faltan, las coloca usando los datos del trade guardado.
     """
-    logger.debug(f"[{symbol}] Órdenes abiertas raw: {open_orders}")
     try:
         # 1. Obtener órdenes abiertas de Binance
         open_orders = client.futures_get_open_orders(symbol=symbol)
@@ -146,6 +145,7 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
             tiene_tp = any(o.get('closePosition') == True and o['type'] in {'TAKE_PROFIT_MARKET', 'TAKE_PROFIT'} for o in open_orders)
 
             # Colocar solo lo que falta, sin cancelar lo que ya existe
+            ordenes_ya_existentes = 0
             if not tiene_sl:
                 try:
                     client.futures_create_order(
@@ -158,7 +158,7 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
                     logger.info(f"[{symbol}] SL rescatado en {sl}")
                 except Exception as e:
                     if "-4130" in str(e):
-                        logger.info(f"[{symbol}] SL ya existe como condicional.")
+                        ordenes_ya_existentes += 1
                     else:
                         logger.error(f"[{symbol}] Error rescatando SL: {e}")
 
@@ -174,9 +174,13 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
                     logger.info(f"[{symbol}] TP rescatado en {tp}")
                 except Exception as e:
                     if "-4130" in str(e):
-                        logger.info(f"[{symbol}] TP ya existe como condicional.")
+                        ordenes_ya_existentes += 1
                     else:
                         logger.error(f"[{symbol}] Error rescatando TP: {e}")
+            
+            # Si ambas ordenes ya existian, todo esta bien — sin ruido
+            if ordenes_ya_existentes == 2:
+                return False
 
             logger.info(f"[{symbol}] ✅ Órdenes de protección re-sincronizadas.")
             return True
