@@ -122,7 +122,6 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
             return False
 
         if len(exit_orders) < 2:
-            logger.warning(f"[{symbol}] Protección incompleta ({len(exit_orders)}/2). Rescatando...")
 
             side_bot = current_trade.get('direction') or current_trade.get('side')
             side_entry = "BUY" if side_bot == "LONG" else "SELL"
@@ -137,12 +136,13 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
             tp = _round_tick(tp, tick)
 
             # Identificar qué órdenes faltan por tipo
-            tipos_presentes = {o['type'] for o in exit_orders}
             tiene_sl = any(
                 o['type'] in {'STOP_MARKET', 'STOP'} and (o.get('reduceOnly') == True or o.get('closePosition') == True)
                 for o in open_orders
             )
-            tiene_tp = any(o.get('closePosition') == True and o['type'] in {'TAKE_PROFIT_MARKET', 'TAKE_PROFIT'} for o in open_orders)
+            tiene_tp = any(
+                o.get('closePosition') == True and o['type'] in {'TAKE_PROFIT_MARKET', 'TAKE_PROFIT'} 
+                for o in open_orders)
 
             # Colocar solo lo que falta, sin cancelar lo que ya existe
             ordenes_ya_existentes = 0
@@ -182,6 +182,7 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
             if ordenes_ya_existentes == 2:
                 return False
 
+            logger.warning(f"[{symbol}] Protección incompleta ({len(exit_orders)}/2). Rescatando...")
             logger.info(f"[{symbol}] ✅ Órdenes de protección re-sincronizadas.")
             return True
             
