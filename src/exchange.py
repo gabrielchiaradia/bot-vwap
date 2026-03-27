@@ -99,18 +99,29 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
     Verifica si una posición abierta tiene sus órdenes de protección (SL/TP).
     Si faltan, las coloca usando los datos del trade guardado.
     """
-    
+    logger.debug(f"[{symbol}] Órdenes abiertas raw: {open_orders}")
     try:
         # 1. Obtener órdenes abiertas de Binance
         open_orders = client.futures_get_open_orders(symbol=symbol)
-        logger.info(f"[{symbol}] Órdenes abiertas raw: {open_orders}")
+        
         # 2. Filtramos SL y TP — incluye LIMIT reduceOnly (usado como TP)
         exit_orders = [
             o for o in open_orders
             if o['type'] in ['STOP_MARKET', 'TAKE_PROFIT_MARKET', 'TAKE_PROFIT', 'STOP']
-            or (o['type'] == 'LIMIT' and (o.get('reduceOnly') == True or o.get('closePosition') == True))
+            or (o.get('closePosition') == True)
         ]
         
+        # Si hay exactamente 1 orden y es un TP (LIMIT reduceOnly sin stopPrice),
+        # el SL existe como condicional en Binance testnet — no intentar recrear
+        solo_tp_presente = (
+            len(exit_orders) == 1 and
+            exit_orders[0]['type'] == 'TAKE_PROFIT_MARKET' and
+            exit_orders[0].get('closePosition') == True
+        )
+        if solo_tp_presente:
+            logger.debug(f"[{symbol}] SL condicional detectado. Proteccion completa.")
+            return False
+
         if len(exit_orders) < 2:
             logger.warning(f"[{symbol}] Protección incompleta ({len(exit_orders)}/2). Rescatando...")
 
@@ -132,8 +143,7 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
                 o['type'] in {'STOP_MARKET', 'STOP'} and (o.get('reduceOnly') == True or o.get('closePosition') == True)
                 for o in open_orders
             )
-            tiene_tp = bool({'TAKE_PROFIT_MARKET', 'TAKE_PROFIT'} & tipos_presentes) \
-                       or any(o['type'] == 'LIMIT' and o.get('reduceOnly') == True for o in exit_orders)
+            tiene_tp = any(o.get('closePosition') == True and o['type'] in {'TAKE_PROFIT_MARKET', 'TAKE_PROFIT'} for o in open_orders)
 
             # Colocar solo lo que falta, sin cancelar lo que ya existe
             if not tiene_sl:
@@ -143,8 +153,7 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
                         side=close_side,
                         type=FUTURE_ORDER_TYPE_STOP_MARKET,
                         stopPrice=sl,
-                        quantity=qty,
-                        reduceOnly=True
+                        closePosition=True
                     )
                     logger.info(f"[{symbol}] SL rescatado en {sl}")
                 except Exception as e:
@@ -155,11 +164,9 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
                     client.futures_create_order(
                         symbol=symbol,
                         side=close_side,
-                        type=FUTURE_ORDER_TYPE_LIMIT,
-                        timeInForce=TIME_IN_FORCE_GTC,
-                        price=tp,
-                        quantity=qty,
-                        reduceOnly=True
+                        type=FUTURE_ORDER_TYPE_TAKE_PROFIT_MARKET,
+                        stopPrice=tp,
+                        closePosition=True
                     )
                     logger.info(f"[{symbol}] TP rescatado en {tp}")
                 except Exception as e:
@@ -231,19 +238,16 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
             side=close_side,
             type=FUTURE_ORDER_TYPE_STOP_MARKET,
             stopPrice=sl_price,
-            quantity=qty,
-            reduceOnly=True
+            closePosition=True
         )
 
-        # Take Profit (Limit)
+        # Take Profit (Market)
         client.futures_create_order(
             symbol=symbol,
             side=close_side,
-            type=FUTURE_ORDER_TYPE_LIMIT,
-            timeInForce=TIME_IN_FORCE_GTC,
-            price=tp_price,
-            quantity=qty,
-            reduceOnly=True
+            type=FUTURE_ORDER_TYPE_TAKE_PROFIT_MARKET,
+            stopPrice=tp_price,
+            closePosition=True
         )
         logger.info(f"[{BOT_ID}] ✅ Protección colocada: SL {sl_price} | TP {tp_price} (tick {tick})")
     except Exception as e:
