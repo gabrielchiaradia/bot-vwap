@@ -4,7 +4,8 @@ from threading import Thread
 from src.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, BOT_NAME
 from src.logger import logger
 
-_ultimo_heartbeat = time.time()
+_ultimo_heartbeat = 0
+_balance_ayer = 0.0
 
 class TelegramNotifier:
     def __init__(self, token: str, chat_id: str, bot_tag: str):
@@ -99,32 +100,55 @@ class TelegramNotifier:
         )
         self._send_async(msg)
 
-    def heartbeat_si_corresponde(self, client, cycle_count: int, minutos: int = 60):
-        global _ultimo_heartbeat
-        ahora = time.time()
-        
-        # 60 minutos * 60 segundos = 3600 segundos
-        if ahora - _ultimo_heartbeat >= (minutos * 60):
+    def heartbeat_si_corresponde(self, client, cycle_count: int):
+        global _ultimo_heartbeat, _balance_ayer
+        from datetime import datetime, timezone
+    
+        # 1. Hora actual en UTC (Timezone-aware)
+        ahora_utc = datetime.now(timezone.utc)
+    
+        # 2. Convertimos el último envío para comparar fechas
+        ultimo_dt = datetime.fromtimestamp(_ultimo_heartbeat, tz=timezone.utc)
+    
+        # CONDICIÓN: Son las 19:00 UTC y no se envió hoy
+        if ahora_utc.hour == 19 and ahora_utc.minute == 0 and ultimo_dt.date() < ahora_utc.date():
             try:
-                # Importamos acá adentro para evitar problemas cruzados
                 from src.exchange import get_account_status
                 account = get_account_status(client)
-                balance = account['wallet_balance']
-                pnl     = account['unrealized_pnl']
-                pnl_emoji = "📈" if pnl >= 0 else "📉"
-                
+            
+                balance_actual = account['wallet_balance']
+                pnl_abierto    = account['unrealized_pnl']
+            
+                # 3. Cálculo de beneficio diario (PnL 24h)
+                # Si es la primera vez que corre, el pnl_diario será 0
+                if _balance_ayer == 0:
+                    _balance_ayer = balance_actual
+            
+                pnl_diario = balance_actual - _balance_ayer
+                pct_diario = (pnl_diario / _balance_ayer * 100) if _balance_ayer > 0 else 0
+            
+                pnl_open_emoji = "📈" if pnl_abierto >= 0 else "📉"
+                pnl_24h_emoji  = "💰" if pnl_diario >= 0 else "🧧"
+            
                 msg = self._tag(
-                    f"🟢 <b>REPORTE DE ESTADO</b>\n"
+                    f"📊 <b>REPORTE DIARIO | 19:00 UTC</b>\n"
                     f"───────────────────\n"
-                    f"🕒 <b>Uptime:</b> {cycle_count} minutos\n"
-                    f"💰 <b>Balance:</b> <code>{balance:.2f} USDT</code>\n"
-                    f"{pnl_emoji} <b>PnL abierto:</b> <code>{pnl:+.2f} USDT</code>\n"
-                    f"✅ <i>El bot sigue operando correctamente.</i>"
+                    f"💰 <b>Balance Total:</b> <code>{balance_actual:.2f} USDT</code>\n"
+                    f"{pnl_24h_emoji} <b>PnL 24h:</b> <code>{pnl_diario:+.2f} USDT</code> ({pct_diario:+.2f}%)\n"
+                    f"{pnl_open_emoji} <b>PnL Abierto:</b> <code>{pnl_abierto:+.2f} USDT</code>\n"
+                    f"───────────────────\n"
+                    f"🕒 <b>Uptime:</b> {cycle_count} min\n"
+                    f"✅ <i>Bot operando sin interrupciones.</i>"
                 )
+            
                 self._send_async(msg)
-                
-                # Reseteamos el reloj
-                _ultimo_heartbeat = ahora
+            
+                # 4. Actualizamos marcas para el próximo día
+                _ultimo_heartbeat = ahora_utc.timestamp()
+                _balance_ayer = balance_actual # Guardamos el balance de hoy para comparar mañana
+            
+                logger.info(f"✅ Reporte diario enviado. PnL 24h: {pnl_diario:+.2f} USDT")
+            
             except Exception as e:
                 logger.warning(f"⚠️ Error enviando heartbeat: {e}")
 # ══════════════════════════════════════════════════════════

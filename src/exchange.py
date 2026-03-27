@@ -99,11 +99,11 @@ def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
     Verifica si una posición abierta tiene sus órdenes de protección (SL/TP).
     Si faltan, las coloca usando los datos del trade guardado.
     """
-    logger.debug(f"[{symbol}] Órdenes abiertas raw: {open_orders}")
+    
     try:
         # 1. Obtener órdenes abiertas de Binance
         open_orders = client.futures_get_open_orders(symbol=symbol)
-        
+        logger.debug(f"[{symbol}] Órdenes abiertas raw: {open_orders}")
         # 2. Filtramos SL y TP — incluye LIMIT reduceOnly (usado como TP)
         exit_orders = [
             o for o in open_orders
