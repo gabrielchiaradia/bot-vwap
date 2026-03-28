@@ -628,20 +628,37 @@ function renderStatus(st) {
 }
 
 function renderPositions(data) {
-  _openPositions = Array.isArray(data) ? data : (data.positions || []);
+  const newPositions = Array.isArray(data) ? data : (data.positions || []);
 
-  document.getElementById('posCount').textContent = _openPositions.length;
+  document.getElementById('posCount').textContent = newPositions.length;
 
-  if (!_openPositions.length) {
+  if (!newPositions.length) {
+    _openPositions = [];
     document.getElementById('posBody').innerHTML = '<div class="pos-empty">Sin posiciones abiertas</div>';
-    connectPriceWebSocket(new Set()); // Desconectar WS si no hay trades
+    connectPriceWebSocket(new Set());
     return;
   }
 
-  // 1. Extraer símbolos únicos y conectar WebSocket
+  // Si las posiciones no cambiaron (mismo trade_id y cantidad), solo actualizamos
+  // los datos internos sin destruir el HTML — así el WS sigue actualizando sin interrupciones
+  const oldIds = _openPositions.map(p => p.trade_id || p.symbol).join(',');
+  const newIds = newPositions.map(p => p.trade_id || p.symbol).join(',');
+  const samePositions = oldIds === newIds && _openPositions.length === newPositions.length;
+
+  // Siempre actualizamos los datos internos
+  _openPositions = newPositions;
+
+  // Conectar WS si cambiaron los símbolos
   const symbols = new Set(_openPositions.map(p => p.symbol));
   connectPriceWebSocket(symbols);
 
+  // Si las posiciones son las mismas, no reconstruimos el HTML
+  if (samePositions && document.getElementById('pos-pnl-val-0')) {
+    if (Object.keys(_livePrices).length > 0) updatePnLDisplay();
+    return;
+  }
+
+  // Rebuild HTML solo cuando cambian las posiciones
   let html = '<div style="overflow-x:auto"><div class="pos-row" style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)"><span>Símbolo</span><span>Dir</span><span>Entry / Live</span><span>Qty</span><span>SL</span><span>TP</span><span>Risk</span><span>uPnL</span><span>Abierto</span><span>Bot</span></div>';
 
   _openPositions.forEach((p, i) => {
