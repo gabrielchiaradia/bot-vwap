@@ -283,7 +283,10 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
   <div class="section-title">🗒️ Historial de Trades</div>
   <div class="table-wrap">
     <div class="table-header">
-      <span style="font-size:12px;color:var(--muted)"><span id="trade-count-live"></span></span>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:12px;color:var(--muted)"><span id="trade-count-live"></span></span>
+        <button onclick="exportarTrades()" style="font-size:11px;padding:4px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:5px" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">&#8659; Exportar JSON</button>
+      </div>
       <div class="filter-tabs">
         <button class="filter-tab active" onclick="filtrarLive('all',this)">Todos</button>
         <button class="filter-tab" onclick="filtrarLive('WIN',this)">Wins</button>
@@ -764,7 +767,7 @@ function renderLiveTable(trades) {
 function renderLiveTableRows(trades) {
   const tb = document.getElementById('trades-tbody-live');
   if (!tb) return;
-  const list = trades.slice(-300);
+  const list = trades;
   let rows = [];
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
@@ -978,7 +981,7 @@ function renderBTTable(trades, isOrig) {
 function renderBTTableRows(trades) {
   const tb = document.getElementById('trades-tbody');
   if (!tb) return;
-  const list = trades.slice(-300);
+  const list = trades;
   let rows = [];
   for (let i = 0; i < list.length; i++) {
     const t = list[i]; const pnl = Number(t.pnl)||0;
@@ -1018,6 +1021,21 @@ function cargarDemo() {
 // ══════════════════════════════════════════════════════════
 //  THEME
 // ══════════════════════════════════════════════════════════
+function exportarTrades() {
+  try {
+    const trades = _liveTradesFiltered || _liveTradesOrig || [];
+    const summary = (_liveData && _liveData.summary) ? _liveData.summary : {};
+    const data = { summaries: [{ ...summary, trades: trades }] };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    a.href = url;
+    a.download = `trades_${ts}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Error exportando: ' + e.message); }
+}
 function toggleTheme(){const c=document.documentElement.getAttribute('data-theme')||'dark';const n=c==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('scalp-theme',n);document.getElementById('theme-btn').textContent=n==='dark'?'🌓 Tema Claro':'☀️ Tema Oscuro';TC=gTC();if(_liveData)renderLive(_liveData);if(_allVariants.length)seleccionarVariante(_activeIdx)}
 (function(){const s=localStorage.getItem('scalp-theme');if(s){document.documentElement.setAttribute('data-theme',s);const b=document.getElementById('theme-btn');if(b)b.textContent=s==='dark'?'🌓 Tema Claro' : '☀️ Tema Oscuro'}})();
 
