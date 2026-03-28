@@ -573,7 +573,10 @@ let botActivo = 'BTC';
 function cambiarBotSeleccionado(nuevoBot) {
     botActivo = nuevoBot;
     console.log("Cambiando vista a:", botActivo);
-    fetchLiveData(); // Forzamos a que recargue los datos del nuevo bot al instante
+    // Resetear WS para que se reconecte con los pares del nuevo bot
+    if (_priceWs) { _priceWs.close(); _priceWs = null; }
+    _subscribedSymbols = new Set();
+    fetchLiveData();
 }
 
 // 3. Tu función original (ahora usa la variable global en vez de la fija)
@@ -589,15 +592,15 @@ async function fetchLiveData() {
     if (trRes.status === 'fulfilled' && trRes.value.ok) {
       _liveData = await trRes.value.json();
       renderLive(_liveData);
+      // Marcar como conectado apenas llegan los datos de trades
+      document.getElementById('liveLabel').textContent = `Conectado a ${botActivo}`;
+      document.getElementById('liveDot').className = 'live-dot on';
     }
     if (posRes.status === 'fulfilled' && posRes.value.ok) {
       renderPositions(await posRes.value.json());
     }
     if (stRes.status === 'fulfilled' && stRes.value.ok) {
       renderStatus(await stRes.value.json());
-      // Esto cambia el punto rojo a verde y actualiza el texto
-      document.getElementById('liveLabel').textContent = `Conectado a ${botActivo}`;
-      document.getElementById('liveDot').className = 'live-dot on';
     }
 
     document.getElementById('header-status').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR');
@@ -1067,7 +1070,7 @@ function connectPriceWebSocket(symbols) {
     _priceWs.onclose = () => {
       // Reconectar automáticamente si se cae
       setTimeout(() => { 
-        if (_openPositions.length > 0) connectPriceWebSocket(_subscribedSymbols); 
+        if (_subscribedSymbols.size > 0) connectPriceWebSocket(_subscribedSymbols); 
       }, 5000);
     };
     _priceWs.onerror = () => { _priceWs.close(); };
