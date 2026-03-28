@@ -21,13 +21,10 @@ def obtener_señal_actual(client):
         df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
         
         # 3. Generar Señales
-        signal, entry_price, _ = get_vwap_signals(df_bands)
-        
-        # Necesitamos la std_dev para el SL dinámico que tenés en el main
-        last_row = df_bands.iloc[-1]
-        std_dev = last_row['std_dev']
+        # tp_vwap es el VWAP — el Take Profit real de la estrategia
+        signal, entry_price, tp_vwap = get_vwap_signals(df_bands)
 
-        return signal, entry_price, std_dev
+        return signal, entry_price, tp_vwap
 
     except Exception as e:
         logger.error(f"Error procesando estrategia: {e}")
