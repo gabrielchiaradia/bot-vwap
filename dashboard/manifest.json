@@ -1,0 +1,9 @@
+{
+  "name": "VWAP Bot Dashboard",
+  "short_name": "VWAP Bot",
+  "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"}],
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#0f0f0f"
+}
