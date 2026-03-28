@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from datetime import datetime, timezone
-from src.config import SYMBOL, BAND_MULT
+from src.config import SYMBOL, BAND_MULT, TRADING_DAYS
 from src.logger import logger
 
 def obtener_señal_actual(client):
@@ -21,10 +21,13 @@ def obtener_señal_actual(client):
         df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
         
         # 3. Generar Señales
-        # tp_vwap es el VWAP — el Take Profit real de la estrategia
-        signal, entry_price, tp_vwap = get_vwap_signals(df_bands)
+        signal, entry_price, _ = get_vwap_signals(df_bands)
+        
+        # Necesitamos la std_dev para el SL dinámico que tenés en el main
+        last_row = df_bands.iloc[-1]
+        std_dev = last_row['std_dev']
 
-        return signal, entry_price, tp_vwap
+        return signal, entry_price, std_dev
 
     except Exception as e:
         logger.error(f"Error procesando estrategia: {e}")
@@ -83,6 +86,10 @@ def get_vwap_signals(df):
     # FILTRO DE INICIO DE SESIÓN: 
     # Ignorar las primeras 120 velas del día porque las bandas están colapsadas.
     if last['bar_num'] < 120:
+        return None, None, None
+
+    # FILTRO DE DIA DE SEMANA
+    if TRADING_DAYS == 'WORKDAYS' and last['open_time'].weekday() >= 5:
         return None, None, None
         
     # --- 1. FILTRO DE COOLDOWN (Frena el sobre-operaje) ---

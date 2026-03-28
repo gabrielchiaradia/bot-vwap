@@ -11,7 +11,6 @@ BOT_NAME = os.getenv("BOT_NAME", f"VWAP_{BOT_ID}")
 BINANCE_API_KEY = os.getenv("BINANCE_API_KEY")
 BINANCE_API_SECRET = os.getenv("BINANCE_API_SECRET")
 IS_TESTNET = os.getenv("IS_TESTNET", "True").lower() == "true"
-TIMEFRAME="1m"
 
 # Símbolo y Parámetros
 SYMBOL = os.getenv("SYMBOL", "ETHUSDT")
@@ -21,6 +20,7 @@ LEVERAGE = int(os.getenv("LEVERAGE", "20"))
 BAND_MULT = float(os.getenv("BAND_MULT", "2.5"))
 TP_RR_RATIO = float(os.getenv("TP_RR_RATIO", "0.4"))
 RISK_PER_TRADE = float(os.getenv("RISK_PER_TRADE", "3.0"))
+TRADING_DAYS = os.getenv("TRADING_DAYS", "ALLWEEK").upper()  # ALLWEEK | WORKDAYS
 
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")

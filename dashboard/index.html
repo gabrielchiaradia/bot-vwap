@@ -75,11 +75,11 @@
 
   /* ── OPEN POSITIONS ── */
   .pos-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:28px;overflow:hidden}
-  .pos-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:11px}
-  .pos-header-title{font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.1em;font-size:10px}
+  .pos-header{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;font-size:16px}
+  .pos-header-title{font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.1em;font-size:14px}
   .pos-count{background:var(--accent);color:#000;font-size:10px;font-weight:700;padding:1px 7px;border-radius:4px}
   .pos-empty{padding:24px;text-align:center;color:var(--muted);font-size:12px}
-  .pos-row{display:grid;grid-template-columns:80px 70px 100px 100px 100px 80px 100px auto;gap:4px;padding:10px 20px;align-items:center;border-bottom:1px solid rgba(30,45,61,.4);font-size:11px}
+  .pos-row{display:grid;grid-template-columns:90px 70px 110px 60px 120px 120px 70px 130px 90px auto;gap:6px;padding:12px 20px;align-items:center;border-bottom:1px solid rgba(30,45,61,.4);font-size:16px}
   .pos-row:last-child{border-bottom:none}
 
   /* ── CHARTS ── */
@@ -154,7 +154,7 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
   .comp-row.active{background:var(--row-active)!important;border-left:3px solid var(--accent)}
 
   /* ── LIVE STATUS ── */
-  .status-bar{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  .status-bar{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:16px}
   .status-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
   .status-item strong{color:var(--text)}
 
@@ -639,37 +639,53 @@ function renderPositions(data) {
   const symbols = new Set(_openPositions.map(p => p.symbol));
   connectPriceWebSocket(symbols);
 
-  let html = '<div style="overflow-x:auto"><div class="pos-row" style="font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)"><span>Símbolo</span><span>Dir</span><span>Entry / Live</span><span>SL</span><span>TP</span><span>Risk</span><span>uPnL</span><span>Abierto</span><span>Bot</span></div>';
+  let html = '<div style="overflow-x:auto"><div class="pos-row" style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)"><span>Símbolo</span><span>Dir</span><span>Entry / Live</span><span>Qty</span><span>SL</span><span>TP</span><span>Risk</span><span>uPnL</span><span>Abierto</span><span>Bot</span></div>';
 
   _openPositions.forEach((p, i) => {
     const dirC = p.direction === 'LONG' ? 'badge-long' : 'badge-short';
     const timeVal = p.entry_time || p.open_time || p.opened_at;
     const opened = timeVal ? new Date(timeVal).toLocaleString('es-AR', {hour:'2-digit',minute:'2-digit',day:'2-digit',month:'2-digit'}) : '—';
-    const entry = Number(p.entry_price || p.entry || 0).toFixed(2);
-    const sl = Number(p.sl_price || p.sl || 0).toFixed(2);
-    const tp = Number(p.tp_price || p.tp || 0).toFixed(2);
-    const botName = p.bot_id || p.bot || '—';
-    const risk = p.risk_pct ? `${p.risk_pct}%` : '—';
+    const entryNum = Number(p.entry_price || p.entry || 0);
+    const slNum    = Number(p.sl_price || p.sl || 0);
+    const tpNum    = Number(p.tp_price || p.tp || 0);
+    const qty      = Number(p.quantity || 0);
+    const botName  = p.bot_id || p.bot || '—';
+    const risk     = p.risk_pct ? `${p.risk_pct}%` : '—';
+    const isLong   = p.direction === 'LONG';
 
-    // Guardamos el PnL inicial que viene del JSON
+    // Monto en $ si se toca SL o TP
+    const slDiff = isLong ? (slNum - entryNum) * qty : (entryNum - slNum) * qty;  // siempre negativo
+    const tpDiff = isLong ? (tpNum - entryNum) * qty : (entryNum - tpNum) * qty;  // siempre positivo
+    const slSign = slDiff > 0 ? '+' : '';
+    const tpSign = tpDiff > 0 ? '+' : '';
+
+    const slCell = `<div style="line-height:1.4">
+      <div style="color:var(--red)">$${slNum.toFixed(2)}</div>
+      <div style="color:var(--red);font-size:11px;opacity:0.85">${slSign}$${slDiff.toFixed(2)}</div>
+    </div>`;
+
+    const tpCell = `<div style="line-height:1.4">
+      <div style="color:var(--green)">$${tpNum.toFixed(2)}</div>
+      <div style="color:var(--green);font-size:11px;opacity:0.85">${tpSign}$${tpDiff.toFixed(2)}</div>
+    </div>`;
+
+    // PnL inicial del JSON
     const pnlNum = Number(p.pnl || p.unrealized_pnl || 0);
     const pnlColor = pnlNum >= 0 ? 'var(--green)' : 'var(--red)';
     const pnlSign = pnlNum > 0 ? '+' : '';
-    
-    // CLAVE: Agregamos pos-pnl-val-i
     const pnlStr = `<span id="pos-pnl-val-${i}" style="color:${pnlColor};font-weight:bold">${pnlSign}${pnlNum.toFixed(2)} USDT</span>`;
 
-    // CLAVE: Agregamos pos-price-i
-    html += `<div class="pos-row">
+    html += `<div class="pos-row" style="font-size:16px">
                <span style="color:var(--text-strong);font-weight:600">${p.symbol}</span>
                <span><span class="badge ${dirC}">${p.direction}</span></span>
-               <span id="pos-price-${i}">$${entry}</span>
-               <span style="color:var(--red)">$${sl}</span>
-               <span style="color:var(--green)">$${tp}</span>
+               <span id="pos-price-${i}">$${entryNum.toFixed(2)}</span>
+               <span style="color:var(--muted)">${qty}</span>
+               ${slCell}
+               ${tpCell}
                <span style="color:var(--text-strong)">${risk}</span>
                <span>${pnlStr}</span>
                <span style="color:var(--muted)">${opened}</span>
-               <span style="color:var(--muted);font-size:10px">${botName}</span>
+               <span style="color:var(--muted);font-size:13px">${botName}</span>
              </div>`;
   });
 

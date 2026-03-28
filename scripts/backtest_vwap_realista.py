@@ -35,6 +35,44 @@ class K:
     X  = "\033[0m"    # reset
 
 
+# ── Ventanas horarias ─────────────────────────────────────────────────────────
+def parse_window(w: str):
+    """
+    Parsea una ventana horaria.
+    Formatos: '13-16', '8-12', '24h', '0-24'
+    Retorna: (hora_inicio, hora_fin) o None si es 24h
+    """
+    w = w.strip()
+    if w in ('24h', '24', '0-24', 'all'):
+        return None  # Sin filtro
+    if '-' in w:
+        parts = w.split('-')
+        return (int(parts[0]), int(parts[1]))
+    raise ValueError(f"Formato de ventana invalido: {w}")
+
+def in_workday(open_time, workdays_only: bool) -> bool:
+    """Retorna True si la vela esta en un dia habil (lunes-viernes)."""
+    if not workdays_only:
+        return True
+    import pandas as pd
+    dow = pd.Timestamp(open_time).weekday()  # 0=lunes, 6=domingo
+    return dow < 5
+
+def in_window(open_time, window):
+    """Verifica si un timestamp esta dentro de la ventana horaria UTC."""
+    if window is None:
+        return True
+    h = open_time.hour if hasattr(open_time, 'hour') else None
+    if h is None:
+        # numpy datetime64
+        import pandas as pd
+        h = pd.Timestamp(open_time).hour
+    start, end = window
+    if start < end:
+        return start <= h < end
+    else:  # overnight wrap ej: 22-6
+        return h >= start or h < end
+
 # ── Data ──────────────────────────────────────────────────────────────────────
 def fetch_candles(client, symbol, interval, days):
     cache_dir = "backtest/data"
@@ -121,7 +159,7 @@ def calculate_vwap_bands(df, mult):
     return df
 
 
-def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, max_duration=60, risk_pct=1):
+def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, max_duration=60, risk_pct=1, window=None, workdays_only=False):
     trades = []
     capital = INITIAL_CAPITAL
     df = calculate_vwap_bands(df.copy(), band_mult)
@@ -136,7 +174,6 @@ def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, ma
     uppers = df["upper_band"].values
     lowers = df["lower_band"].values
     bar_nums = df["bar_num"].values
-
     last_trade_bar = -999
 
     for i in range(10, len(df)):
@@ -144,6 +181,14 @@ def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, ma
             continue
             
         if bar_nums[i] < 120:
+            continue
+
+        # Filtro de ventana horaria
+        if window is not None and not in_window(times[i], window):
+            continue
+
+        # Filtro de dias de semana
+        if not in_workday(times[i], workdays_only):
             continue
             
         # Precios de la vela actual (lo que realmente hace el mercado)
@@ -335,55 +380,78 @@ def main():
     p = argparse.ArgumentParser(description="Backtest VWAP Reversion")
     p.add_argument("--symbol", default="BTCUSDT", help="Select SYMBOL to scan, default = BTCUSDT")
     p.add_argument("--dias", type=int, default=90, help="Dias a escanear. default = 90")
-    p.add_argument("--rr", type=str, default='0.5', help="Risk/Ratio %%, default = 0.5")
-    p.add_argument("--band-mult", type=float, default=2.5, help="default 2.5")
+    p.add_argument("--rr", type=str, default='0.5', help="Risk/Ratio. Acepta múltiples separados por coma: 0.4,0.5,0.7")
+    p.add_argument("--band-mult", type=str, default='2.5', help="Multiplicador de banda. Acepta múltiples separados por coma: 2.0,2.5,3.0")
     p.add_argument("--min-profit", type=float, default=0.20, help="Porcentaje minimo de profit para ignorar fees")
-    p.add_argument("--risk", type=float, default=1, help="Riesgo por trade en porcentaje (ej: 1.0 para 1%%) default = 1")
+    p.add_argument("--risk", type=str, default='1', help="Riesgo por trade en %%. Acepta múltiples separados por coma: 1,2,3")
     p.add_argument("--sweep-rr", action="store_true", help="Prueba diferentes RR (0.2, 0.3, 0.4, 0.5, 0.7)")
-    p.add_argument("--scan", action="store_true",help="Escanea BTCUSDT - ETHUSDT")
+    p.add_argument("--scan", action="store_true", help="Escanea BTCUSDT - ETHUSDT")
+    p.add_argument("--windows", type=str, default="24h", help="Ventana(s) horaria UTC. Ej: 13-16 | 8-12;13-16;24h (multiples separadas por ;)")
+    p.add_argument("--days", type=str, default="allweek", help="Dias a operar: allweek (default) | workdays (lun-vie) | allweek;workdays para comparar")
     args = p.parse_args()
 
     client = Client(os.getenv("BINANCE_API_KEY",""), os.getenv("BINANCE_API_SECRET",""))
     symbols = ["BTCUSDT", "ETHUSDT"] if args.scan else [args.symbol]
-    
-    # RRs ajustados para enfocarnos en los rentables (< 1.0)
-    #rrs = [0.2, 0.3, 0.4, 0.5, 0.7] if args.sweep_rr else [args.rr]
+
     if args.sweep_rr:
-        rrs = [0.2, 0.3, 0.4, 0.5, 0.7] 
+        rrs = [0.2, 0.3, 0.4, 0.5, 0.7]
     else:
         rrs = [float(x) for x in args.rr.split(',')]
-    
+
+    windows_raw = [w.strip() for w in args.windows.split(';')]
+    windows = [(w, parse_window(w)) for w in windows_raw]
+
+    days_raw = [d.strip() for d in args.days.split(';')]
+    days_list = [(d, d == 'workdays') for d in days_raw]
+
+    band_mults = [float(x) for x in args.band_mult.split(',')]
+    risks      = [float(x) for x in args.risk.split(',')]
+
+    total_combos = len(symbols) * len(band_mults) * len(rrs) * len(risks) * len(windows) * len(days_list) 
+    if total_combos > 1:
+        print(f"\n{K.C}{'═'*62}{K.X}")
+        print(f"  {K.B}SWEEP: {total_combos} combinaciones{K.X}  "
+              f"symbols={symbols}  band={band_mults}  rr={rrs}  risk={risks}  windows={windows_raw}  days={days_raw}")
+        print(f"{K.C}{'═'*62}{K.X}\n")
+
     all_summaries = []
     ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     os.makedirs("backtest/results", exist_ok=True)
 
     for symbol in symbols:
         df_1m = fetch_candles(client, symbol, "1m", args.dias)
-        for rr_val in rrs:
-            label = f"VWAP_B{args.band_mult}_RR{rr_val}_RSK{args.risk}"
-            risk_decimal = args.risk / 100.0
-            
-            trades, final = run_vwap_backtest(
-                df_1m, symbol, 
-                rr=rr_val, band_mult=args.band_mult, 
-                min_profit_pct=args.min_profit,
-                risk_pct=risk_decimal
-            )
-            
-            s = summary_dict(trades, INITIAL_CAPITAL, final, symbol, args.dias, label, args.band_mult, rr_val, args.risk)
-            s["trades"] = trades
-            print_summary(s)
-            print_monthly(trades)
-            all_summaries.append(s)
+        for band_val in band_mults:
+            for rr_val in rrs:
+                for risk_val in risks:
+                    for win_label, win_parsed in windows:
+                      for day_label, workdays_only in days_list:
+                        label = f"VWAP_B{band_val}_RR{rr_val}_RSK{risk_val}_W{win_label}_D{day_label}"
+                        risk_decimal = risk_val / 100.0
+
+                        trades, final = run_vwap_backtest(
+                            df_1m, symbol,
+                            rr=rr_val, band_mult=band_val,
+                            min_profit_pct=args.min_profit,
+                            risk_pct=risk_decimal,
+                            window=win_parsed,
+                            workdays_only=workdays_only
+                        )
+
+                        s = summary_dict(trades, INITIAL_CAPITAL, final, symbol, args.dias, label, band_val, rr_val, risk_val)
+                        s["trades"] = trades
+                        print_summary(s)
+                        print_monthly(trades)
+                        all_summaries.append(s)
 
     data_out = {"summaries": []}
-    # Generar un nombre de archivo descriptivo
+    # Nombre descriptivo: single → detallado, multi → SWEEP
     if len(all_summaries) == 1:
         s = all_summaries[0]
-        # Creamos el nombre: backtest_ETHUSDT_B2.5_RR0.4_RSK4.0.json
-        filename = f"backtest_{s['symbol']}_B{args.band_mult}_RR{s['rr']}_RSK{args.risk}_{ts_str}.json"
+        win_str = windows_raw[0].replace('-','_')
+        day_str = days_raw[0]
+        filename = f"backtest_{s['symbol']}_B{s['band_mult']}_RR{s['rr']}_RSK{s['risk_pct']}_W{win_str}_D{day_str}_{ts_str}.json"
     else:
-        filename = f"backtest_SCAN_{ts_str}.json"
+        filename = f"backtest_SWEEP_{args.symbol}_{ts_str}.json"
     if len(all_summaries) > 1:
         ranked = sorted(all_summaries, key=lambda x: x["profit_factor"], reverse=True)
         print(f"\n{K.C}{'═'*62}{K.X}")
@@ -393,11 +461,13 @@ def main():
             pf_c = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
             pnl_c = K.G if s['pnl_total'] >= 0 else K.R
             medal = " 🥇" if idx == 1 else " 🥈" if idx == 2 else " 🥉" if idx == 3 else f" {idx}."
-            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}Risk/Reward: {s['rr']}{K.X}] "
+            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}R/R: {s['rr']}{K.X}] "
+                  f"Band={s['band_mult']}{K.X} "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
-                  f"DD={s['max_drawdown']}%")
+                  f"PnL ={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
+                  f"DD={s['max_drawdown']}%{K.X} "
+                  f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")    
         ranked = sorted(all_summaries, key=lambda x: x["pnl_total"], reverse=True)
         print(f"\n{K.C}{'═'*62}{K.X}")
@@ -407,11 +477,13 @@ def main():
             pf_c = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
             pnl_c = K.G if s['pnl_total'] >= 0 else K.R
             medal = " 🥇" if idx == 1 else " 🥈" if idx == 2 else " 🥉" if idx == 3 else f" {idx}."
-            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}Risk/Reward: {s['rr']}{K.X}] "
+            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}R/R: {s['rr']}{K.X}] "
+                  f"Band={s['band_mult']}{K.X} "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
-                  f"DD={s['max_drawdown']}%")
+                  f"PnL={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
+                  f"DD={s['max_drawdown']}%{K.X} "
+                  f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")
 
     out = os.path.join("backtest/results", filename)
