@@ -860,10 +860,6 @@ async function cargarServerFile(name, btn) {
 // ══════════════════════════════════════════════════════════
 //  BACKTEST: UPLOAD / PROCESS
 // ══════════════════════════════════════════════════════════
-const zone = document.getElementById('upload-zone');
-zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) leerJSON(e.dataTransfer.files[0], e.dataTransfer.files[0].name); });
 function cargarArchivo(e) { if (e.target.files[0]) leerJSON(e.target.files[0], e.target.files[0].name); }
 function leerJSON(file, nombre) { const r = new FileReader(); r.onload = ev => { try { procesarJSON(JSON.parse(ev.target.result), nombre) } catch (e) { alert('Error: '+e.message) } }; r.readAsText(file); }
 
@@ -1134,10 +1130,20 @@ function updatePnLDisplay() {
 
 // ── INIT ──
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', detectarServidor);
+  document.addEventListener('DOMContentLoaded', init);
 } else {
-  detectarServidor();
+  init();
 }
-</script>
+
+function init() {
+  // Drag & drop upload zone
+  const zone = document.getElementById('upload-zone');
+  if (zone) {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); if (e.dataTransfer.files[0]) leerJSON(e.dataTransfer.files[0], e.dataTransfer.files[0].name); });
+  }
+  detectarServidor();
+}</script>
 </body>
 </html>
