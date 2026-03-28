@@ -88,6 +88,7 @@ def ejecutar_ciclo_ws(df_velas, buffer):
             else:
                 sl_price = entry_price + dist_sl
 
+            logger.info(f"[{SYMBOL}] reward={reward:.2f} dist_sl={dist_sl:.2f} entry={entry_price:.2f} tp={tp_price:.2f} sl={sl_price:.2f}")
             qty = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
 
             # Cap: notional maximo = 80% del margen disponible * leverage
