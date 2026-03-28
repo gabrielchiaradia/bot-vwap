@@ -64,7 +64,9 @@ def ejecutar_ciclo_ws(df_velas, buffer):
             return
 
         # 4. Analisis de estrategia
-        signal, entry_price, std_dev = obtener_señal_actual(client)
+        # obtener_señal_actual devuelve (signal, entry_price, tp_vwap)
+        # tp_vwap es el VWAP — el Take Profit real de la estrategia
+        signal, entry_price, tp_vwap = obtener_señal_actual(client)
 
         # 5. Actualizacion del dashboard
         exportar_status(
@@ -76,13 +78,15 @@ def ejecutar_ciclo_ws(df_velas, buffer):
 
         # 6. Logica de disparo
         if signal and not pos_abierta:
-            dist_sl = std_dev * 1.5
+            # TP es el VWAP devuelto por la estrategia
+            tp_price = tp_vwap
+            # SL calculado a partir del reward real, replicando exactamente el backtest
+            reward = abs(tp_price - entry_price)
+            dist_sl = reward / TP_RR_RATIO
             if signal == "LONG":
                 sl_price = entry_price - dist_sl
-                tp_price = entry_price + (dist_sl * TP_RR_RATIO)
             else:
                 sl_price = entry_price + dist_sl
-                tp_price = entry_price - (dist_sl * TP_RR_RATIO)
 
             qty = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
 
