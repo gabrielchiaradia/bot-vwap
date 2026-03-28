@@ -495,6 +495,9 @@ async function detectarServidor() {
     document.getElementById('liveDot').classList.add('on');
     document.getElementById('liveDot').classList.remove('off');
     document.getElementById('liveLabel').textContent = 'Conectado al servidor';
+    // Sincronizar botActivo con el valor actual del selector antes del primer fetch
+    const sel = document.getElementById('bot-selector');
+    if (sel) botActivo = sel.value;
     iniciarAutoRefresh();
     cargarServerFiles();
   } else {
@@ -1130,7 +1133,11 @@ function updatePnLDisplay() {
 }
 
 // ── INIT ──
-detectarServidor();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', detectarServidor);
+} else {
+  detectarServidor();
+}
 </script>
 </body>
 </html>
