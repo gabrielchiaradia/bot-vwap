@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
+import requests
 import numpy as np
 import pandas as pd
 
@@ -138,6 +139,83 @@ def fetch_candles(client, symbol, interval, days):
     return result
 
 
+# ── Filtro de noticias (backtest) ─────────────────────────────────────────────
+def load_news_windows(symbol: str, dias: int) -> list:
+    """
+    Descarga eventos de alto impacto de FCS API y construye ventanas de bloqueo.
+    Cachea en backtest/data/news_events_{symbol}.json para no gastar requests.
+    Cada ventana = (evento - 120min, evento + 15min).
+    Retorna lista de tuplas (datetime_inicio, datetime_fin) en UTC.
+    """
+    cache_path = f"backtest/data/news_events_{symbol}.json"
+    events = []
+
+    if os.path.exists(cache_path):
+        file_age = (time.time() - os.path.getmtime(cache_path)) / 3600
+        if file_age < 12:  # cache válido por 12 horas
+            with open(cache_path) as f:
+                events = json.load(f)
+            print(f"  {K.G}📰 News cache cargado:{K.X} {len(events)} eventos ({cache_path})")
+        else:
+            print(f"  {K.Y}📰 News cache expirado. Descargando...{K.X}")
+
+    if not events:
+        api_key = os.getenv("FCS_API_KEY", "")
+        if not api_key:
+            print(f"  {K.Y}⚠️  --no-news activo pero FCS_API_KEY no está en .env. Ignorando filtro.{K.X}")
+            return []
+        try:
+            resp = requests.get(
+                "https://fcsapi.com/api-v3/forex/economy_cal",
+                params={"access_key": api_key, "impact": "high", "range": "today-week"},
+                timeout=15
+            )
+            data = resp.json()
+            if data.get("status") is False:
+                print(f"  {K.R}📰 FCS API error: {data.get('msg')}{K.X}")
+                return []
+            for item in data.get("response", []):
+                if item.get("impact", "").lower() == "high":
+                    events.append({
+                        "date":     item.get("date", ""),
+                        "currency": item.get("country", "USD").upper(),
+                        "event":    item.get("title", ""),
+                    })
+            os.makedirs("backtest/data", exist_ok=True)
+            with open(cache_path, "w") as f:
+                json.dump(events, f, indent=2)
+            print(f"  {K.G}📰 {len(events)} eventos guardados en {cache_path}{K.X}")
+        except Exception as e:
+            print(f"  {K.R}📰 Error descargando noticias: {e}{K.X}")
+            return []
+
+    # Construir ventanas: [evento - 120min, evento + 15min]
+    windows = []
+    for ev in events:
+        try:
+            dt = datetime.strptime(ev["date"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            windows.append((
+                dt - timedelta(minutes=120),
+                dt + timedelta(minutes=15),
+            ))
+        except Exception:
+            continue
+
+    print(f"  {K.C}📰 {len(windows)} ventanas de bloqueo construidas.{K.X}")
+    return windows
+
+
+def in_news_window(candle_time, news_windows: list) -> bool:
+    """Retorna True si la vela cae dentro de alguna ventana de bloqueo."""
+    if not news_windows:
+        return False
+    ts = pd.Timestamp(candle_time)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("UTC")
+    dt = ts.to_pydatetime()
+    return any(start <= dt <= end for start, end in news_windows)
+
+
 def calculate_vwap_bands(df, mult):
     df['date'] = df['open_time'].dt.date
     df['typ'] = (df['high'] + df['low'] + df['close']) / 3
@@ -159,7 +237,7 @@ def calculate_vwap_bands(df, mult):
     return df
 
 
-def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, max_duration=60, risk_pct=1, window=None, workdays_only=False):
+def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, max_duration=60, risk_pct=1, window=None, workdays_only=False, news_windows=None):
     trades = []
     capital = INITIAL_CAPITAL
     df = calculate_vwap_bands(df.copy(), band_mult)
@@ -189,6 +267,10 @@ def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, ma
 
         # Filtro de dias de semana
         if not in_workday(times[i], workdays_only):
+            continue
+
+        # Filtro de noticias económicas (solo si --no-news activo)
+        if news_windows and in_news_window(times[i], news_windows):
             continue
             
         # Precios de la vela actual (lo que realmente hace el mercado)
@@ -378,16 +460,19 @@ def print_monthly(trades):
 
 def main():
     p = argparse.ArgumentParser(description="Backtest VWAP Reversion")
-    p.add_argument("--symbol", default="BTCUSDT", help="Select SYMBOL to scan, default = BTCUSDT")
-    p.add_argument("--dias", type=int, default=90, help="Dias a escanear. default = 90")
-    p.add_argument("--rr", type=str, default='0.5', help="Risk/Ratio. Acepta múltiples separados por coma: 0.4,0.5,0.7")
-    p.add_argument("--band-mult", type=str, default='2.5', help="Multiplicador de banda. Acepta múltiples separados por coma: 2.0,2.5,3.0")
-    p.add_argument("--min-profit", type=float, default=0.20, help="Porcentaje minimo de profit para ignorar fees")
-    p.add_argument("--risk", type=str, default='1', help="Riesgo por trade en %%. Acepta múltiples separados por coma: 1,2,3")
-    p.add_argument("--sweep-rr", action="store_true", help="Prueba diferentes RR (0.2, 0.3, 0.4, 0.5, 0.7)")
-    p.add_argument("--scan", action="store_true", help="Escanea BTCUSDT - ETHUSDT")
-    p.add_argument("--windows", type=str, default="24h", help="Ventana(s) horaria UTC. Ej: 13-16 | 8-12;13-16;24h (multiples separadas por ;)")
-    p.add_argument("--days", type=str, default="allweek", help="Dias a operar: allweek (default) | workdays (lun-vie) | allweek;workdays para comparar")
+    p.add_argument("--symbol",     default="BTCUSDT")
+    p.add_argument("--dias",       type=int, default=90)
+    p.add_argument("--rr",         type=str, default='0.5')
+    p.add_argument("--band-mult",  type=str, default='2.5')
+    p.add_argument("--min-profit", type=float, default=0.20)
+    p.add_argument("--risk",       type=str, default='1')
+    p.add_argument("--sweep-rr",   action="store_true")
+    p.add_argument("--scan",       action="store_true")
+    p.add_argument("--windows",    type=str, default="24h")
+    p.add_argument("--days",       type=str, default="allweek",
+                   help="Dias a operar: allweek (default) | workdays (lun-vie) | allweek;workdays para comparar")
+    p.add_argument("--no-news",    action="store_true",
+                   help="Simular filtro de noticias: excluir velas en ventana de eventos high-impact (FCS API)")
     args = p.parse_args()
 
     client = Client(os.getenv("BINANCE_API_KEY",""), os.getenv("BINANCE_API_SECRET",""))
@@ -407,7 +492,16 @@ def main():
     band_mults = [float(x) for x in args.band_mult.split(',')]
     risks      = [float(x) for x in args.risk.split(',')]
 
-    total_combos = len(symbols) * len(band_mults) * len(rrs) * len(risks) * len(windows) * len(days_list) 
+    # ── Cargar ventanas de noticias una sola vez (si --no-news activo) ────────
+    # Se cachea por símbolo; si hay sweep multi-symbol, se carga una vez por cada uno
+    news_windows_cache = {}
+    if args.no_news:
+        print(f"\n{K.Y}📰 Modo --no-news activo. Cargando eventos de alto impacto...{K.X}")
+        for sym in symbols:
+            news_windows_cache[sym] = load_news_windows(sym, args.dias)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    total_combos = len(symbols) * len(band_mults) * len(rrs) * len(risks) * len(windows) * len(days_list)
     if total_combos > 1:
         print(f"\n{K.C}{'═'*62}{K.X}")
         print(f"  {K.B}SWEEP: {total_combos} combinaciones{K.X}  "
@@ -420,12 +514,14 @@ def main():
 
     for symbol in symbols:
         df_1m = fetch_candles(client, symbol, "1m", args.dias)
+        nw = news_windows_cache.get(symbol, None)
         for band_val in band_mults:
             for rr_val in rrs:
                 for risk_val in risks:
                     for win_label, win_parsed in windows:
                       for day_label, workdays_only in days_list:
-                        label = f"VWAP_B{band_val}_RR{rr_val}_RSK{risk_val}_W{win_label}_D{day_label}"
+                        news_tag = "_NEWS" if args.no_news else ""
+                        label = f"VWAP_B{band_val}_RR{rr_val}_RSK{risk_val}_W{win_label}_D{day_label}{news_tag}"
                         risk_decimal = risk_val / 100.0
 
                         trades, final = run_vwap_backtest(
@@ -434,7 +530,8 @@ def main():
                             min_profit_pct=args.min_profit,
                             risk_pct=risk_decimal,
                             window=win_parsed,
-                            workdays_only=workdays_only
+                            workdays_only=workdays_only,
+                            news_windows=nw,
                         )
 
                         s = summary_dict(trades, INITIAL_CAPITAL, final, symbol, args.dias, label, band_val, rr_val, risk_val)
@@ -443,15 +540,15 @@ def main():
                         print_monthly(trades)
                         all_summaries.append(s)
 
-    data_out = {"summaries": []}
     # Nombre descriptivo: single → detallado, multi → SWEEP
+    news_suffix = "_NEWS" if args.no_news else ""
     if len(all_summaries) == 1:
         s = all_summaries[0]
         win_str = windows_raw[0].replace('-','_')
         day_str = days_raw[0]
-        filename = f"backtest_{s['symbol']}_B{s['band_mult']}_RR{s['rr']}_RSK{s['risk_pct']}_W{win_str}_D{day_str}_{ts_str}.json"
+        filename = f"backtest_{s['symbol']}_B{s['band_mult']}_RR{s['rr']}_RSK{s['risk_pct']}_W{win_str}_D{day_str}{news_suffix}_{ts_str}.json"
     else:
-        filename = f"backtest_SWEEP_{args.symbol}_{ts_str}.json"
+        filename = f"backtest_SWEEP_{args.symbol}{news_suffix}_{ts_str}.json"
     if len(all_summaries) > 1:
         ranked = sorted(all_summaries, key=lambda x: x["profit_factor"], reverse=True)
         print(f"\n{K.C}{'═'*62}{K.X}")
