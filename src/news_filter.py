@@ -38,19 +38,21 @@ SYMBOL_CURRENCIES = {
 
 
 def _fetch_events_from_api() -> list:
-    """
-    Descarga eventos económicos de alto impacto del día actual y el siguiente
-    desde FCS API. Retorna lista de dicts con keys: time_utc, currency, event.
-    """
     if not FCS_API_KEY:
         logger.warning("[NewsFilter] FCS_API_KEY no configurada. Filtro desactivado.")
         return []
 
-    url = "https://fcsapi.com/api-v3/forex/economy_cal"
+    # Pedir desde hoy hasta 7 días adelante
+    now   = datetime.now(timezone.utc)
+    date_from = now.strftime("%Y-%m-%d")
+    date_to   = (now + timedelta(days=7)).strftime("%Y-%m-%d")
+
+    url = "https://api-v4.fcsapi.com/forex/economy_cal"
     params = {
         "access_key": FCS_API_KEY,
-        "impact":     "high",        # solo high impact
-        "range":      "today-week",  # hoy + próximos días
+        "symbol":     "USD",       # monedas de alto impacto para crypto
+        "from":       date_from,
+        "to":         date_to,
     }
 
     try:
@@ -65,16 +67,13 @@ def _fetch_events_from_api() -> list:
         events = []
         for item in data.get("response", []):
             try:
-                # FCS devuelve: date="2025-01-15 14:30:00", country="USD", title="CPI"
-                dt_str  = item.get("date", "")
-                currency = item.get("country", "").upper()
-                title    = item.get("title", "")
-                impact   = item.get("impact", "").lower()
-
-                if impact != "high":
+                # importance: "2" = high impact
+                if str(item.get("importance", "0")) != "2":
                     continue
-
-                dt_utc = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                dt_str   = item.get("date", "")
+                currency = item.get("currency", item.get("country", "")).upper()
+                title    = item.get("title", "")
+                dt_utc   = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
                 events.append({
                     "time_utc": dt_utc,
                     "currency": currency,
