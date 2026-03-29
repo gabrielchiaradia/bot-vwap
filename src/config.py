@@ -15,6 +15,7 @@ IS_TESTNET = os.getenv("IS_TESTNET", "True").lower() == "true"
 # Símbolo y Parámetros
 SYMBOL = os.getenv("SYMBOL", "ETHUSDT")
 LEVERAGE = int(os.getenv("LEVERAGE", "20"))
+TIMEFRAME = os.getenv("TIMEFRAME", "1m")
 
 # Estrategia VWAP
 BAND_MULT = float(os.getenv("BAND_MULT", "2.5"))
