@@ -25,10 +25,10 @@ class TelegramNotifier:
             except Exception as e:
                 logger.warning(f"⚠️ Error Telegram: {e}")
         Thread(target=task, daemon=True).start()
-    
+
     def _tag(self, msg: str) -> str:
         return f"🤖 <b>[{self.bot_tag}]</b>\n{msg}"
-    
+
     def alert_startup(self, symbol: str, risk: float, rr: float, multiplier: float, balance: float):
         msg = self._tag(
             f"🚀 <b>Bot Iniciado</b>\n"
@@ -44,9 +44,8 @@ class TelegramNotifier:
 
     def alert_trade_open(self, symbol, direction, entry, sl, tp, qty, risk_pct):
         emoji = "🚀" if direction == "LONG" else "📉"
-        # Calculamos la distancia porcentual al TP/SL para dar más info
         dist_tp = abs((tp - entry) / entry) * 100
-        
+
         msg = self._tag(
             f"{emoji} <b>NUEVA POSICIÓN ABIERTA</b>\n"
             f"───────────────────\n"
@@ -70,7 +69,7 @@ class TelegramNotifier:
             emoji, title = "⚖️", "POSICIÓN CERRADA (BE)"
         else:
             emoji, title = "🏁", "POSICIÓN CERRADA (LOSS)"
-            
+
         pnl_emoji = "💵" if pnl > 0 else "💸"
         pnl_perc = (pnl / balance_at_open) * 100 if balance_at_open > 0 else 0
 
@@ -103,33 +102,35 @@ class TelegramNotifier:
     def heartbeat_si_corresponde(self, client, cycle_count: int):
         global _ultimo_heartbeat, _balance_ayer
         from datetime import datetime, timezone
-    
+
         # 1. Hora actual en UTC (Timezone-aware)
         ahora_utc = datetime.now(timezone.utc)
-    
+
         # 2. Convertimos el último envío para comparar fechas
         ultimo_dt = datetime.fromtimestamp(_ultimo_heartbeat, tz=timezone.utc)
-    
+
         # CONDICIÓN: Son las 19:00 UTC y no se envió hoy
         if ahora_utc.hour == 19 and ahora_utc.minute == 0 and ultimo_dt.date() < ahora_utc.date():
+            # Actualizamos la marca ANTES del try para evitar spam si falla
+            _ultimo_heartbeat = ahora_utc.timestamp()
             try:
                 from src.exchange import get_account_status
                 account = get_account_status(client)
-            
+
                 balance_actual = account['wallet_balance']
                 pnl_abierto    = account['unrealized_pnl']
-            
-                # 3. Cálculo de beneficio diario (PnL 24h)
+
+                # Cálculo de beneficio diario (PnL 24h)
                 # Si es la primera vez que corre, el pnl_diario será 0
                 if _balance_ayer == 0:
                     _balance_ayer = balance_actual
-            
+
                 pnl_diario = balance_actual - _balance_ayer
                 pct_diario = (pnl_diario / _balance_ayer * 100) if _balance_ayer > 0 else 0
-            
+
                 pnl_open_emoji = "📈" if pnl_abierto >= 0 else "📉"
                 pnl_24h_emoji  = "💰" if pnl_diario >= 0 else "🧧"
-            
+
                 msg = self._tag(
                     f"📊 <b>REPORTE DIARIO | 19:00 UTC</b>\n"
                     f"───────────────────\n"
@@ -140,17 +141,17 @@ class TelegramNotifier:
                     f"🕒 <b>Uptime:</b> {cycle_count} min\n"
                     f"✅ <i>Bot operando sin interrupciones.</i>"
                 )
-            
+
                 self._send_async(msg)
-            
-                # 4. Actualizamos marcas para el próximo día
-                _ultimo_heartbeat = ahora_utc.timestamp()
-                _balance_ayer = balance_actual # Guardamos el balance de hoy para comparar mañana
-            
+
+                # Guardamos el balance de hoy para comparar mañana
+                _balance_ayer = balance_actual
                 logger.info(f"✅ Reporte diario enviado. PnL 24h: {pnl_diario:+.2f} USDT")
-            
+
             except Exception as e:
                 logger.warning(f"⚠️ Error enviando heartbeat: {e}")
+
+
 # ══════════════════════════════════════════════════════════
 #  FACTORY (Para que el resto del bot lo use fácil)
 # ══════════════════════════════════════════════════════════
