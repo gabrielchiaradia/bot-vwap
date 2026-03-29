@@ -9,7 +9,7 @@ __pycache__/
 venv/
 
 # Data downloaded to backtest
-data/
+data/*
 
 # Datos compartidos (Dashboard)
 dashboard/data/*.json
