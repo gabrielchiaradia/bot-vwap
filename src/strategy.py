@@ -7,27 +7,23 @@ from src.logger import logger
 def obtener_señal_actual(client):
     """
     Centraliza la descarga de datos, el cálculo de bandas y la generación de señal.
-    Retorna: (signal, entry_price, std_dev) o (None, None, None) si falla.
+    Retorna: (signal, entry_price, tp_vwap) o (None, None, None) si falla.
     """
     try:
-        # 1. Obtención de datos (Lo que antes estaba en el main)
+        # 1. Obtención de datos
         candles = client.futures_klines(symbol=SYMBOL, interval='1m', limit=1500)
         df = pd.DataFrame(candles, columns=['timestamp','open','high','low','close','volume','ct','qav','tr','tba','tqa','i'])
         df['open_time'] = pd.to_datetime(df['timestamp'], unit='ms')
         cols = ['open','high','low','close','volume']
         df[cols] = df[cols].astype(float)
 
-        # 2. Cálculo de Bandas (Tus funciones existentes)
+        # 2. Cálculo de Bandas
         df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
-        
-        # 3. Generar Señales
-        signal, entry_price, _ = get_vwap_signals(df_bands)
-        
-        # Necesitamos la std_dev para el SL dinámico que tenés en el main
-        last_row = df_bands.iloc[-1]
-        std_dev = last_row['std_dev']
 
-        return signal, entry_price, std_dev
+        # 3. Generar Señales — tp_vwap es el VWAP, el TP real de la estrategia
+        signal, entry_price, tp_vwap = get_vwap_signals(df_bands)
+
+        return signal, entry_price, tp_vwap
 
     except Exception as e:
         logger.error(f"Error procesando estrategia: {e}")
