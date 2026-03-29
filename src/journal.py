@@ -20,11 +20,11 @@ def _save(trades: list):
     with open(JOURNAL_FILE, "w", encoding="utf-8") as f:
         json.dump(trades, f, indent=2, ensure_ascii=False)
 
-def record_open(trade_id, symbol, direction, entry_price, sl_price, tp_price, quantity, risk_pct, balance_at_open: float = 0.0):
+def record_open(trade_id, symbol, direction, entry_price, sl_price, tp_price, quantity, risk_pct, balance_at_open: float = 0.0, status: str = "OPEN"):
     trades = _load()
     nuevo_trade = {
         "trade_id": trade_id,
-        "bot_id": BOT_ID, # Diferenciador para el Dashboard
+        "bot_id": BOT_ID,
         "symbol": symbol,
         "direction": direction,
         "entry_time": datetime.now(timezone.utc).isoformat(),
@@ -34,7 +34,7 @@ def record_open(trade_id, symbol, direction, entry_price, sl_price, tp_price, qu
         "quantity": quantity,
         "risk_pct": risk_pct,
         "balance_at_open": balance_at_open,
-        "status": "OPEN",
+        "status": status,
         "result": None,
         "exit_price": None,
         "pnl_usdt": 0.0,
@@ -42,7 +42,8 @@ def record_open(trade_id, symbol, direction, entry_price, sl_price, tp_price, qu
     }
     trades.append(nuevo_trade)
     _save(trades)
-    logger.info(f"[{BOT_ID}] Trade guardado en Journal: {trade_id}")
+    label = "PENDING_FILL" if status == "PENDING_FILL" else "Trade guardado"
+    logger.info(f"[{BOT_ID}] {label} en Journal: {trade_id}")
     return nuevo_trade
 
 def record_close(trade_id, exit_price, pnl_usdt):

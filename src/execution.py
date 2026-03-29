@@ -98,9 +98,9 @@ def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp
             crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
         else:
             logger.warning(f"[{symbol}] ⚠️ LIMIT no se llenó en 10s. Orden activa en Binance, monitoreando...")
-            # Registramos igual para que el rescatador lo siga
-            record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open)
-        
+            # Guardamos como PENDING_FILL — el sincronizador lo distinguirá de un cierre real
+            record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open, status="PENDING_FILL")
+
         return True
 
     except Exception as e:
@@ -112,14 +112,19 @@ def sincronizar_realidad_vs_journal(client, symbol):
     Audita Binance vs Journal para:
     1. Registrar trades abiertos a mano.
     2. Cerrar trades en el journal con el PnL REAL si se cerraron (SL/TP o a mano).
+    3. Promover PENDING_FILL a OPEN si la posición ya existe en Binance.
+    4. Cancelar PENDING_FILL silenciosamente si la orden nunca se ejecutó.
     """
     try:
         all_trades = _load()
-        pos_real = get_open_position(client, symbol) # Lo que hay en Binance
-        
-        # Buscamos qué dice el journal que debería estar abierto para este símbolo
-        open_in_journal = [t for t in all_trades if t.get('symbol') == symbol and t.get('status') == 'OPEN']
-        
+        pos_real = get_open_position(client, symbol)
+
+        # Incluimos PENDING_FILL además de OPEN para que el sincronizador los gestione
+        open_in_journal = [
+            t for t in all_trades
+            if t.get('symbol') == symbol and t.get('status') in ('OPEN', 'PENDING_FILL')
+        ]
+
         modified = False
         ahora = datetime.now(timezone.utc).isoformat()
 
@@ -128,55 +133,47 @@ def sincronizar_realidad_vs_journal(client, symbol):
             try:
                 entry_dt = datetime.fromisoformat(trade['entry_time'])
                 entry_ts = int(entry_dt.timestamp() * 1000)
-        
-                # Traer historial desde la apertura
+
                 historial = client.futures_account_trades(
-                    symbol=symbol, 
+                    symbol=symbol,
                     startTime=entry_ts,
                     limit=100
                 )
-        
+
                 if not historial:
                     logger.warning(f"[{symbol}] Sin historial de trades en Binance")
                     return
 
-                # Verificar que realmente hubo un cierre (realizedPnl != 0)
-                # Si no hay, la orden LIMIT no se llenó todavía — no es un cierre real
                 hay_cierre = any(float(op.get('realizedPnl', 0)) != 0 for op in historial)
                 if not hay_cierre:
                     logger.info(f"[{symbol}] Historial sin PnL realizado — orden aun no ejecutada. Ignorando cierre falso.")
                     return
-        
-                # Filtrar solo los trades de ESTA posición:
-                # Los que tienen el mismo side que la apertura (entry)
-                # y los que tienen side contrario (cierre)
+
                 entry_side = "BUY" if trade['direction'] == "LONG" else "SELL"
                 close_side = "SELL" if trade['direction'] == "LONG" else "BUY"
-        
+
                 pnl_acumulado = 0.0
                 fees_acumulados = 0.0
                 ultimo_precio = trade.get('entry_price', 0)
                 qty_entrada = float(trade.get('quantity', 0))
-        
+
                 for op in historial:
                     realizado = float(op.get('realizedPnl', 0))
                     comm = float(op.get('commission', 0))
                     op_side = op.get('side', '')
                     op_qty = float(op.get('qty', 0))
-            
-                    # Siempre sumar fees (tanto apertura como cierre)
+
                     fees_acumulados += comm
-            
-                    # Solo sumar PnL de operaciones de cierre
+
                     if realizado != 0:
                         pnl_acumulado += realizado
                         ultimo_precio = float(op.get('price', 0))
-        
+
                 trade['pnl_bruto'] = round(pnl_acumulado, 4)
                 trade['fees'] = round(fees_acumulados, 4)
                 trade['pnl_usdt'] = round(pnl_acumulado - fees_acumulados, 4)
                 trade['exit_price'] = ultimo_precio
-        
+
                 logger.info(
                     f"[{symbol}] PnL final: "
                     f"Bruto={trade['pnl_bruto']} "
@@ -185,11 +182,7 @@ def sincronizar_realidad_vs_journal(client, symbol):
                     f"Exit={ultimo_precio}"
                 )
 
-                # ==========================================
-                # INICIO NUEVO: ALERTA DE TELEGRAM AL CERRAR
-                # ==========================================
                 notifier = crear_notifier()
-                
                 pnl_neto = trade['pnl_usdt']
                 if pnl_neto > 0:
                     resultado = "WIN"
@@ -207,39 +200,74 @@ def sincronizar_realidad_vs_journal(client, symbol):
                     exit_price=ultimo_precio,
                     balance_at_open=float(trade.get('balance_at_open', 0.0))
                 )
-                # ==========================================
             except Exception as e:
                 logger.error(f"Error calculando PnL/Fees: {e}")
 
+        # ==========================================
+        # CASO 0: PENDING_FILL — la orden todavía no se ejecutó
+        # ==========================================
+        pending_in_journal = [t for t in open_in_journal if t.get('status') == 'PENDING_FILL']
+        only_open_in_journal = [t for t in open_in_journal if t.get('status') == 'OPEN']
+
+        if pending_in_journal:
+            for t in pending_in_journal:
+                if pos_real:
+                    # La posición existe en Binance → la orden se llenó mientras esperábamos
+                    logger.info(f"[{symbol}] ✅ Orden PENDING_FILL ahora ejecutada. Promoviendo a OPEN.")
+                    t['status'] = 'OPEN'
+                    # Colocar SL/TP si no los tiene todavía
+                    try:
+                        side = "BUY" if t['direction'] == "LONG" else "SELL"
+                        place_sl_tp(client, symbol, side, float(t['quantity']), float(t['sl_price']), float(t['tp_price']))
+                        logger.info(f"[{symbol}] ✅ SL/TP colocados para trade promovido.")
+                    except Exception as e:
+                        logger.error(f"[{symbol}] Error colocando SL/TP en promoción: {e}")
+                    crear_notifier().alert_trade_open(
+                        symbol, t['direction'], float(t['entry_price']),
+                        float(t['sl_price']), float(t['tp_price']),
+                        float(t['quantity']), float(t['risk_pct'])
+                    )
+                    modified = True
+                else:
+                    # No hay posición en Binance → la orden nunca se ejecutó, se canceló sola
+                    logger.info(f"[{symbol}] Orden PENDING_FILL cancelada/expirada en Binance. Limpiando journal silenciosamente.")
+                    t['status'] = 'CANCELLED'
+                    t['close_time'] = ahora
+                    t['result'] = 'CANCELLED'
+                    cancel_all_open_orders(client, symbol)
+                    modified = True
+                    # NO activa cooldown — no hubo trade real
+
+            if modified:
+                _save(all_trades)
+            return  # Si había pendientes, los resolvimos. Salimos.
 
         # ==========================================
         # CASO 1: SE CERRÓ (SL, TP o lo cerraste a mano)
         # ==========================================
-        if not pos_real and open_in_journal:
-            for t in open_in_journal:
+        if not pos_real and only_open_in_journal:
+            for t in only_open_in_journal:
                 logger.info(f"[{symbol}] Detectado cierre externo.")
                 t['status'] = 'CLOSED'
                 t['close_time'] = ahora
-                calcular_pnl_y_fees_final(t) # <--- LLAMADA A LA LÓGICA NUEVA
-                # --- Limpiamos ordenes huerfanas ---
+                calcular_pnl_y_fees_final(t)
                 logger.info("Limpiando órdenes huérfanas previas...")
                 cancel_all_open_orders(client, symbol)
-                # --------------------
                 modified = True
 
         # ==========================================
         # CASO 2: SE ABRIÓ A MANO DESDE EL CELULAR/PC
         # ==========================================
-        elif pos_real and not open_in_journal:
+        elif pos_real and not only_open_in_journal:
             logger.warning(f"[{symbol}] ⚠️ Detectada posición abierta a mano. Registrando en Journal...")
-            
+
             nuevo_trade = {
                 "trade_id": f"MANUAL-{str(uuid.uuid4())[:4]}",
-                "bot_id": "MANUAL", # Para que sepas que no fue la estrategia
+                "bot_id": "MANUAL",
                 "symbol": symbol,
                 "direction": pos_real['side'],
                 "entry_price": pos_real['entry'],
-                "sl_price": 0.0, # Al ser manual, asume 0 hasta que el rescatador actúe
+                "sl_price": 0.0,
                 "tp_price": 0.0,
                 "quantity": pos_real['size'],
                 "risk_pct": 0.0,
@@ -250,25 +278,23 @@ def sincronizar_realidad_vs_journal(client, symbol):
             }
             all_trades.append(nuevo_trade)
             modified = True
-            
+
         # ==========================================
-        # CASO 3: FLIP A MANO (Estabas LONG, y abriste SHORT de golpe)
+        # CASO 3: FLIP A MANO
         # ==========================================
-        elif pos_real and open_in_journal:
-            t = open_in_journal[0]
+        elif pos_real and only_open_in_journal:
+            t = only_open_in_journal[0]
             if t['direction'] != pos_real['side']:
                 logger.warning(f"[{symbol}] Cambio de dirección manual detectado.")
                 t['status'] = 'CLOSED'
                 t['close_time'] = ahora
-                calcular_pnl_y_fees_final(t) # <--- TAMBIÉN CALCULAMOS ACÁ
-                # ---> Limpiamos ordenes huerfanas <---
+                calcular_pnl_y_fees_final(t)
                 cancel_all_open_orders(client, symbol)
                 logger.info(f"[{symbol}] 🧹 Limpieza de órdenes por cambio de dirección manual.")
-                # --------------------
                 modified = True
 
         if modified:
             _save(all_trades)
-            
+
     except Exception as e:
         logger.error(f"Error en sincronizador: {e}")
