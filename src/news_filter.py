@@ -58,7 +58,7 @@ def _fetch_events_from_ff() -> list:
                     if item.get("impact", "").lower() != "high":
                         continue
 
-                    currency = item.get("currency", "").upper()
+                    currency = item.get("country", "").upper()
                     if currency != "USD":
                         continue
 
