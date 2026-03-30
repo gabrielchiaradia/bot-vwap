@@ -154,6 +154,7 @@ def load_news_windows(symbol: str, dias: int) -> list:
         if file_age < 12:
             with open(cache_path) as f:
                 raw = json.load(f)
+        if raw:  # solo usar cache si tiene datos
             events = raw
             print(f"  {K.G}📰 News cache cargado:{K.X} {len(events)} eventos ({cache_path})")
         else:
@@ -167,13 +168,18 @@ def load_news_windows(symbol: str, dias: int) -> list:
         for url in FF_URLS:
             try:
                 resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                if resp.status_code == 429:
+                    print(f"  {K.Y}📰 FF rate limit (429). Esperá unos minutos y reintentá.{K.X}")
+                    continue
+                if resp.status_code == 404:
+                    continue  # nextweek normal si es antes del jueves
                 if resp.status_code != 200:
                     print(f"  {K.Y}📰 FF {url} → HTTP {resp.status_code}{K.X}")
                     continue
                 for item in resp.json():
                     if item.get("impact", "").lower() != "high":
                         continue
-                    if item.get("currency", "").upper() != "USD":
+                    if item.get("country", "").upper() != "USD":
                         continue
                     events.append({
                         "date":     item.get("date", ""),
