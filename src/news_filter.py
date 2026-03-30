@@ -1,13 +1,16 @@
 # src/news_filter.py
 """
 Filtro de noticias económicas de alto impacto.
-Fuente: FCS API (https://fcsapi.com)
+Fuente: Forex Factory (API pública no oficial, sin key requerida)
+  Semana actual:  https://nfs.faireconomy.media/ff_calendar_thisweek.json
+  Semana próxima: https://nfs.faireconomy.media/ff_calendar_nextweek.json
 
-Vars de entorno requeridas:
-  FCS_API_KEY               — API key de FCS
+Vars de entorno:
   NEWS_FILTER_ENABLED       — "true" / "false" (default: true)
   NEWS_BLOCK_MINUTES_BEFORE — minutos antes del evento para bloquear (default: 120)
   NEWS_CLOSE_IF_LOSS_PCT    — % máximo de pérdida para cerrar igual (default: -1.0)
+                              ej: -1.0 significa: cierra si PnL >= -1.0%
+                              (en profit O hasta 1% abajo)
 """
 
 import os
@@ -17,97 +20,94 @@ from datetime import datetime, timezone, timedelta
 from src.logger import logger
 
 # ── Configuración desde .env ──────────────────────────────────────────────────
-FCS_API_KEY            = os.getenv("FCS_API_KEY", "")
-NEWS_FILTER_ENABLED    = os.getenv("NEWS_FILTER_ENABLED", "true").lower() == "true"
-BLOCK_MINUTES_BEFORE   = int(os.getenv("NEWS_BLOCK_MINUTES_BEFORE", "120"))
-CLOSE_IF_LOSS_PCT      = float(os.getenv("NEWS_CLOSE_IF_LOSS_PCT", "-1.0"))  # ej: -1.0 = hasta -1%
+NEWS_FILTER_ENABLED  = os.getenv("NEWS_FILTER_ENABLED", "true").lower() == "true"
+BLOCK_MINUTES_BEFORE = int(os.getenv("NEWS_BLOCK_MINUTES_BEFORE", "120"))
+CLOSE_IF_LOSS_PCT    = float(os.getenv("NEWS_CLOSE_IF_LOSS_PCT", "-1.0"))
 
 # ── Cache en memoria ──────────────────────────────────────────────────────────
-_cache_events: list      = []
-_cache_timestamp: float  = 0.0
-_CACHE_TTL_SECONDS       = 15 * 60  # 15 minutos
+_cache_events: list   = []
+_cache_timestamp: float = 0.0
+_CACHE_TTL_SECONDS    = 15 * 60  # refrescar cada 15 minutos
 
-# ── Mapeo símbolo → monedas a monitorear ─────────────────────────────────────
-# FCS usa códigos de moneda estándar. Crypto con alto impacto USD se trata como USD.
-SYMBOL_CURRENCIES = {
-    "BTCUSDT": ["USD"],
-    "ETHUSDT": ["USD"],
-    "SOLUSDT": ["USD"],
-    "BNBUSDT": ["USD"],
-}
+# ── URLs Forex Factory ────────────────────────────────────────────────────────
+FF_URLS = [
+    "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+    "https://nfs.faireconomy.media/ff_calendar_nextweek.json",
+]
 
 
-def _fetch_events_from_api() -> list:
-    if not FCS_API_KEY:
-        logger.warning("[NewsFilter] FCS_API_KEY no configurada. Filtro desactivado.")
-        return []
+def _fetch_events_from_ff() -> list:
+    """
+    Descarga eventos de alto impacto de Forex Factory.
+    Filtra solo impacto 'High' y moneda 'USD'.
+    Retorna lista de dicts: {time_utc, currency, event}
+    """
+    events = []
 
-    # Pedir desde hoy hasta 7 días adelante
-    now   = datetime.now(timezone.utc)
-    date_from = now.strftime("%Y-%m-%d")
-    date_to   = (now + timedelta(days=7)).strftime("%Y-%m-%d")
-
-    url = "https://api-v4.fcsapi.com/forex/economy_cal"
-    params = {
-        "access_key": FCS_API_KEY,
-        "symbol":     "USD",       # monedas de alto impacto para crypto
-        "from":       date_from,
-        "to":         date_to,
-    }
-
-    try:
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-
-        if data.get("status") is False:
-            logger.warning(f"[NewsFilter] FCS API error: {data.get('msg')}")
-            return []
-
-        events = []
-        for item in data.get("response", []):
-            try:
-                # importance: "2" = high impact
-                if str(item.get("importance", "0")) != "2":
-                    continue
-                dt_str   = item.get("date", "")
-                currency = item.get("currency", item.get("country", "")).upper()
-                title    = item.get("title", "")
-                dt_utc   = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                events.append({
-                    "time_utc": dt_utc,
-                    "currency": currency,
-                    "event":    title,
-                })
-            except Exception as e:
-                logger.debug(f"[NewsFilter] Error parseando evento: {e}")
+    for url in FF_URLS:
+        try:
+            resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code != 200:
+                logger.warning(f"[NewsFilter] FF {url} → HTTP {resp.status_code}")
                 continue
 
-        logger.info(f"[NewsFilter] {len(events)} eventos high-impact descargados de FCS API.")
-        return events
+            data = resp.json()
+            for item in data:
+                try:
+                    # Forex Factory: impact = "High" / "Medium" / "Low" / "Holiday"
+                    if item.get("impact", "").lower() != "high":
+                        continue
 
-    except requests.RequestException as e:
-        logger.error(f"[NewsFilter] Error conectando a FCS API: {e}")
-        return []
+                    currency = item.get("currency", "").upper()
+                    if currency != "USD":
+                        continue
+
+                    title   = item.get("title", "")
+                    dt_str  = item.get("date", "")  # formato: "2026-03-28T12:30:00-04:00"
+
+                    # Parsear con timezone incluido
+                    dt_utc = datetime.fromisoformat(dt_str).astimezone(timezone.utc)
+
+                    events.append({
+                        "time_utc": dt_utc,
+                        "currency": currency,
+                        "event":    title,
+                    })
+                except Exception as e:
+                    logger.debug(f"[NewsFilter] Error parseando item FF: {e}")
+                    continue
+
+            logger.debug(f"[NewsFilter] {url} OK — {len(events)} high-impact USD hasta ahora")
+
+        except requests.RequestException as e:
+            logger.warning(f"[NewsFilter] Error descargando {url}: {e}")
+            continue
+
+    logger.info(f"[NewsFilter] {len(events)} eventos high-impact USD cargados de Forex Factory.")
+    return events
 
 
 def _get_events_cached() -> list:
-    """Devuelve eventos desde cache, refrescando si expiró."""
+    """Devuelve eventos desde cache, refrescando si expiró el TTL."""
     global _cache_events, _cache_timestamp
 
     now = time.monotonic()
     if now - _cache_timestamp > _CACHE_TTL_SECONDS:
-        logger.info("[NewsFilter] Refrescando cache de eventos económicos...")
-        _cache_events    = _fetch_events_from_api()
+        logger.info("[NewsFilter] Refrescando cache de eventos económicos (Forex Factory)...")
+        _cache_events    = _fetch_events_from_ff()
         _cache_timestamp = now
 
     return _cache_events
 
 
-def is_news_blocked(symbol: str, now_utc: datetime = None) -> tuple[bool, str]:
+def is_news_blocked(symbol: str, now_utc: datetime = None) -> tuple:
     """
     Retorna (blocked: bool, reason: str).
-    blocked=True si hay un evento de alto impacto en la ventana de bloqueo.
+    blocked=True si hay un evento USD de alto impacto en la ventana de bloqueo.
+
+    Ventana de bloqueo:
+      - Desde: ahora hasta evento + BLOCK_MINUTES_BEFORE minutos adelante
+      - Post-evento: 15 minutos después del evento
     """
     if not NEWS_FILTER_ENABLED:
         return False, ""
@@ -115,20 +115,19 @@ def is_news_blocked(symbol: str, now_utc: datetime = None) -> tuple[bool, str]:
     if now_utc is None:
         now_utc = datetime.now(timezone.utc)
 
-    currencies = SYMBOL_CURRENCIES.get(symbol.upper(), ["USD"])
     events     = _get_events_cached()
     window_end = now_utc + timedelta(minutes=BLOCK_MINUTES_BEFORE)
 
     for ev in events:
-        if ev["currency"] not in currencies:
-            continue
-        # Bloquear si el evento cae dentro de la ventana futura
-        # También bloquear 15 min después del evento (volatilidad post-news)
-        ev_time = ev["time_utc"]
+        ev_time     = ev["time_utc"]
         post_window = ev_time + timedelta(minutes=15)
 
+        # Bloquear si el evento está próximo O si acabamos de pasar uno
         if now_utc <= ev_time <= window_end or (ev_time <= now_utc <= post_window):
-            reason = f"{ev['event']} ({ev['currency']}) @ {ev_time.strftime('%H:%M')} UTC"
+            reason = (
+                f"{ev['event']} ({ev['currency']}) "
+                f"@ {ev_time.strftime('%Y-%m-%d %H:%M')} UTC"
+            )
             return True, reason
 
     return False, ""
@@ -136,9 +135,13 @@ def is_news_blocked(symbol: str, now_utc: datetime = None) -> tuple[bool, str]:
 
 def should_close_position(current_pnl_pct: float) -> bool:
     """
-    Retorna True si la posición debe cerrarse durante noticia.
-    Cierra si está en profit (pnl_pct >= 0) o si la pérdida es <= CLOSE_IF_LOSS_PCT.
-    Ejemplo: CLOSE_IF_LOSS_PCT=-1.0 → cierra si pnl_pct >= -1.0%
+    Retorna True si la posición debe cerrarse durante una noticia.
+
+    Cierra si:
+      - PnL >= 0%  (en profit)
+      - PnL >= CLOSE_IF_LOSS_PCT  (ej: -1.0 → hasta 1% abajo)
+
+    No cierra si la posición está más de 1% en negativo (deja correr el SL).
     """
     return current_pnl_pct >= CLOSE_IF_LOSS_PCT
 
@@ -147,7 +150,9 @@ def check_and_close_on_news(client, symbol: str, journal_load_fn, journal_close_
                              get_position_fn, close_position_fn, notifier=None):
     """
     Si hay noticia bloqueante y hay posición abierta, evalúa si cerrarla.
-    Compatible con el formato de get_open_position del VWAP bot:
+
+    Cierra solo si PnL >= CLOSE_IF_LOSS_PCT (en profit o caída <= 1%).
+    Compatible con get_open_position del VWAP bot:
       {"size": float, "side": "LONG"/"SHORT", "entry": float}
     """
     blocked, reason = is_news_blocked(symbol)
@@ -196,5 +201,5 @@ def check_and_close_on_news(client, symbol: str, journal_load_fn, journal_close_
     else:
         logger.info(
             f"[NewsFilter] Noticia detectada ({reason}) pero PnL {pnl_pct:+.2f}% "
-            f"< umbral {CLOSE_IF_LOSS_PCT}%. Posición continúa."
+            f"< umbral {CLOSE_IF_LOSS_PCT}%. Posición continúa con SL original."
         )

@@ -142,58 +142,57 @@ def fetch_candles(client, symbol, interval, days):
 # ── Filtro de noticias (backtest) ─────────────────────────────────────────────
 def load_news_windows(symbol: str, dias: int) -> list:
     """
-    Descarga eventos de alto impacto de FCS API y construye ventanas de bloqueo.
-    Cachea en backtest/data/news_events_{symbol}.json para no gastar requests.
-    Cada ventana = (evento - 120min, evento + 15min).
+    Descarga eventos USD de alto impacto de Forex Factory.
+    Cachea en backtest/data/news_events_ff.json por 12 horas.
     Retorna lista de tuplas (datetime_inicio, datetime_fin) en UTC.
     """
-    cache_path = f"backtest/data/news_events_{symbol}.json"
+    cache_path = "backtest/data/news_events_ff.json"
     events = []
 
     if os.path.exists(cache_path):
         file_age = (time.time() - os.path.getmtime(cache_path)) / 3600
-        if file_age < 12:  # cache válido por 12 horas
+        if file_age < 12:
             with open(cache_path) as f:
-                events = json.load(f)
+                raw = json.load(f)
+            events = raw
             print(f"  {K.G}📰 News cache cargado:{K.X} {len(events)} eventos ({cache_path})")
         else:
             print(f"  {K.Y}📰 News cache expirado. Descargando...{K.X}")
 
     if not events:
-        api_key = os.getenv("FCS_API_KEY", "")
-        if not api_key:
-            print(f"  {K.Y}⚠️  --no-news activo pero FCS_API_KEY no está en .env. Ignorando filtro.{K.X}")
-            return []
-        try:
-            resp = requests.get(
-                "https://fcsapi.com/api-v3/forex/economy_cal",
-                params={"access_key": api_key, "impact": "high", "range": "today-week"},
-                timeout=15
-            )
-            data = resp.json()
-            if data.get("status") is False:
-                print(f"  {K.R}📰 FCS API error: {data.get('msg')}{K.X}")
-                return []
-            for item in data.get("response", []):
-                if item.get("impact", "").lower() == "high":
+        FF_URLS = [
+            "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+            "https://nfs.faireconomy.media/ff_calendar_nextweek.json",
+        ]
+        for url in FF_URLS:
+            try:
+                resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                if resp.status_code != 200:
+                    print(f"  {K.Y}📰 FF {url} → HTTP {resp.status_code}{K.X}")
+                    continue
+                for item in resp.json():
+                    if item.get("impact", "").lower() != "high":
+                        continue
+                    if item.get("currency", "").upper() != "USD":
+                        continue
                     events.append({
                         "date":     item.get("date", ""),
-                        "currency": item.get("country", "USD").upper(),
+                        "currency": item.get("currency", "USD").upper(),
                         "event":    item.get("title", ""),
                     })
-            os.makedirs("backtest/data", exist_ok=True)
-            with open(cache_path, "w") as f:
-                json.dump(events, f, indent=2)
-            print(f"  {K.G}📰 {len(events)} eventos guardados en {cache_path}{K.X}")
-        except Exception as e:
-            print(f"  {K.R}📰 Error descargando noticias: {e}{K.X}")
-            return []
+            except Exception as e:
+                print(f"  {K.R}📰 Error descargando {url}: {e}{K.X}")
+
+        os.makedirs("backtest/data", exist_ok=True)
+        with open(cache_path, "w") as f:
+            json.dump(events, f, indent=2)
+        print(f"  {K.G}📰 {len(events)} eventos guardados en {cache_path}{K.X}")
 
     # Construir ventanas: [evento - 120min, evento + 15min]
     windows = []
     for ev in events:
         try:
-            dt = datetime.strptime(ev["date"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            dt = datetime.fromisoformat(ev["date"]).astimezone(timezone.utc)
             windows.append((
                 dt - timedelta(minutes=120),
                 dt + timedelta(minutes=15),
