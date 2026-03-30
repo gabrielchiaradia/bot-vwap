@@ -191,11 +191,12 @@ def check_and_close_on_news(client, symbol: str, journal_load_fn, journal_close_
         try:
             close_position_fn(client, symbol)
             if notifier:
-                notifier.send(
-                    f"📰 *Noticia detectada* — Posición cerrada\n"
-                    f"Par: `{symbol}` | PnL: `{pnl_pct:+.2f}%`\n"
-                    f"Evento: _{reason}_"
+                notifier._send_async(
+                    f"⚠️ <b>Posición cerrada por noticias</b>\n"
+                    f"📌 {symbol} | PnL: {pnl_pct:.2f}%\n"
+                    f"📰 {event_name}"
                 )
+
         except Exception as e:
             logger.error(f"[NewsFilter] Error cerrando posición: {e}")
     else:
