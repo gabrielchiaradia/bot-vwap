@@ -51,12 +51,6 @@ def _fetch_events_from_ff() -> list:
                 logger.warning(f"[NewsFilter] FF {url} → HTTP {resp.status_code}")
                 continue
 
-            # LOG TEMPORAL
-            data = resp.json()
-            logger.info(f"[NewsFilter] DEBUG: {len(data)} items totales de {url}")
-            usd = [x for x in data if x.get("country","").upper() == "USD"]
-            high = [x for x in usd if x.get("impact","").lower() == "high"]
-            logger.info(f"[NewsFilter] DEBUG: {len(usd)} USD, {len(high)} USD+High")
             data = resp.json()
             for item in data:
                 try:
