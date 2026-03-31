@@ -47,6 +47,8 @@ def _fetch_events_from_ff() -> list:
     for url in FF_URLS:
         try:
             resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code == 404:
+                continue  # silencioso, nextweek no siempre existe
             if resp.status_code != 200:
                 logger.warning(f"[NewsFilter] FF {url} → HTTP {resp.status_code}")
                 continue
