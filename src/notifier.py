@@ -111,7 +111,7 @@ class TelegramNotifier:
 
         # CONDICIÓN: Son las 19:00 UTC y no se envió hoy
         if ahora_utc.hour == 19 and ahora_utc.minute == 0 and ultimo_dt.date() < ahora_utc.date():
-            # Actualizamos la marca ANTES del try para evitar spam si falla
+            # 4. Actualizamos la marca ANTES del try para evitar spam si falla
             _ultimo_heartbeat = ahora_utc.timestamp()
             try:
                 from src.exchange import get_account_status
@@ -120,7 +120,7 @@ class TelegramNotifier:
                 balance_actual = account['wallet_balance']
                 pnl_abierto    = account['unrealized_pnl']
 
-                # Cálculo de beneficio diario (PnL 24h)
+                # 3. Cálculo de beneficio diario (PnL 24h)
                 # Si es la primera vez que corre, el pnl_diario será 0
                 if _balance_ayer == 0:
                     _balance_ayer = balance_actual
@@ -150,7 +150,6 @@ class TelegramNotifier:
 
             except Exception as e:
                 logger.warning(f"⚠️ Error enviando heartbeat: {e}")
-
 
 # ══════════════════════════════════════════════════════════
 #  FACTORY (Para que el resto del bot lo use fácil)
