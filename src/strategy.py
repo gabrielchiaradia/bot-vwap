@@ -59,7 +59,9 @@ def actualizar_bandas(df_velas: pd.DataFrame) -> dict | None:
         # Reconstruir open_time desde el índice si es necesario
         df = df_velas.copy()
         if 'open_time' not in df.columns:
-            df['open_time'] = df.index
+            df['open_time'] = pd.to_datetime(df.index, utc=True)
+        else:
+            df['open_time'] = pd.to_datetime(df['open_time'], utc=True)
 
         df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
         last = df_bands.iloc[-1]
