@@ -297,7 +297,8 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
     <div style="overflow-x:auto">
       <table id="table-live"><thead><tr>
         <th data-key="_idx" data-table="live"># <span class="sort-arrow">▼</span></th>
-        <th data-key="time" data-table="live">Timestamp <span class="sort-arrow">▼</span></th>
+        <th data-key="time" data-table="live">Entrada <span class="sort-arrow">▼</span></th>
+        <th data-key="close_time" data-table="live">Cierre <span class="sort-arrow">▼</span></th>
         <th data-key="symbol" data-table="live">Símbolo <span class="sort-arrow">▼</span></th>
         <th data-key="direction" data-table="live">Dir <span class="sort-arrow">▼</span></th>
         <th data-key="entry" data-table="live">Entry <span class="sort-arrow">▼</span></th>
@@ -360,7 +361,8 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
       </div>
       <div style="overflow-x:auto"><table id="table-bt"><thead><tr>
         <th data-key="_idx" data-table="bt"># <span class="sort-arrow">▼</span></th>
-        <th data-key="time" data-table="bt">Timestamp <span class="sort-arrow">▼</span></th>
+        <th data-key="time" data-table="bt">Entrada <span class="sort-arrow">▼</span></th>
+        <th data-key="close_time" data-table="bt">Cierre <span class="sort-arrow">▼</span></th>
         <th data-key="direction" data-table="bt">Dir <span class="sort-arrow">▼</span></th>
         <th data-key="entry" data-table="bt">Entry <span class="sort-arrow">▼</span></th>
         <th data-key="exit" data-table="bt">Exit <span class="sort-arrow">▼</span></th>
@@ -815,6 +817,7 @@ function renderLiveTableRows(trades) {
     const dCl = dir==='LONG'?'long':'short';
     const rCl = res==='WIN'?'win':res==='LOSS'?'loss':'open';
     const ts = String(t.time||'').slice(0,16).replace('T',' ');
+    const cts = t.close_time ? String(t.close_time).slice(0,16).replace('T',' ') : '—';
     const exitStr = t.exit ? '$'+Number(t.exit).toFixed(2) : '—';
     const pnlStr = t.result==='OPEN' ? '—' : pS+'$'+pnl.toFixed(2);
     const dur = formatDuration(t.duration_min);
@@ -822,6 +825,7 @@ function renderLiveTableRows(trades) {
     rows.push(`<tr>
       <td style="color:var(--muted)">${i+1}</td>
       <td>${ts}</td>
+      <td>${cts}</td>
       <td style="color:var(--text-strong)">${t.symbol||'—'}</td>
       <td><span class="badge badge-${dCl}">${dir}</span></td>
       <td>$${Number(t.entry).toFixed(2)}</td>
@@ -1021,8 +1025,9 @@ function renderBTTableRows(trades) {
     const dir = String(t.direction||'—').toUpperCase(); const res = String(t.result||'—').toUpperCase();
     const bias = String(t.bias||'—'); const dCl = dir==='LONG'?'long':'short'; const rCl = res==='WIN'?'win':'loss';
     const ts = String(t.time||'').slice(0,16).replace('T',' ');
+    const cts = t.close_time ? String(t.close_time).slice(0,16).replace('T',' ') : '—';
     const dur = formatDuration(t.duration_min);
-    rows.push(`<tr><td style="color:var(--muted)">${i+1}</td><td>${ts}</td><td><span class="badge badge-${dCl}">${dir}</span></td><td>$${Number(t.entry).toFixed(2)}</td><td>$${Number(t.exit).toFixed(2)}</td><td style="color:var(--red)">$${Number(t.sl).toFixed(2)}</td><td style="color:var(--green)">$${Number(t.tp).toFixed(2)}</td><td class="${pC}">${pS}$${pnl.toFixed(2)}</td><td>$${Number(t.capital).toFixed(2)}</td><td style="color:var(--muted)">${dur}</td><td style="color:var(--yellow)">${t.score||'—'}</td><td style="color:var(--muted)">${t.vol_ratio||'—'}x</td><td><span class="badge badge-bias">${bias}</span></td><td style="color:var(--muted);font-size:10px">${t.ob_zone||'—'}</td><td><span class="badge badge-${rCl}">${res}</span></td></tr>`);
+    rows.push(`<tr><td style="color:var(--muted)">${i+1}</td><td>${ts}</td><td>${cts}</td><td><span class="badge badge-${dCl}">${dir}</span></td><td>$${Number(t.entry).toFixed(2)}</td><td>$${Number(t.exit).toFixed(2)}</td><td style="color:var(--red)">$${Number(t.sl).toFixed(2)}</td><td style="color:var(--green)">$${Number(t.tp).toFixed(2)}</td><td class="${pC}">${pS}$${pnl.toFixed(2)}</td><td>$${Number(t.capital).toFixed(2)}</td><td style="color:var(--muted)">${dur}</td><td style="color:var(--yellow)">${t.score||'—'}</td><td style="color:var(--muted)">${t.vol_ratio||'—'}x</td><td><span class="badge badge-bias">${bias}</span></td><td style="color:var(--muted);font-size:10px">${t.ob_zone||'—'}</td><td><span class="badge badge-${rCl}">${res}</span></td></tr>`);
   }
   tb.innerHTML = rows.join('');
 }
