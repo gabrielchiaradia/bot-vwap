@@ -257,7 +257,7 @@ tr:hover td { background: var(--row-active) } /* Usamos la variable que definimo
     <div class="status-item">Margin: <strong id="liveMargin">—</strong></div>
     <div class="status-item">PnL: <strong id="livePNL">—</strong></div>
     <div class="status-item">Uptime: <strong id="liveUptime">—</strong></div>
-    <div class="status-item">Auto-refresh: <strong>30s</strong></div>
+    <div class="status-item"><button onclick="fetchLiveData()" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 10px;cursor:pointer;font-family:inherit;font-size:10px;color:var(--accent)">↻ Actualizar</button></div>
   </div>
 
   <div class="pos-panel" id="posPanel">
@@ -556,14 +556,11 @@ function handleLogoClick() {
 function iniciarAutoRefresh() {
   pararAutoRefresh();
   fetchLiveData();
-  _refreshTimer = setInterval(fetchLiveData, _refreshInterval * 1000);
-  animateRefreshBar();
+  // Sin auto-refresh — los datos se actualizan cuando el bot escribe los JSONs
 }
 function pararAutoRefresh() { if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; } }
 function animateRefreshBar() {
-  const fill = document.getElementById('refreshFill');
-  fill.style.transition = 'none'; fill.style.width = '0%';
-  requestAnimationFrame(() => { fill.style.transition = `width ${_refreshInterval}s linear`; fill.style.width = '100%'; });
+  // Deshabilitado — sin auto-refresh
 }
 
 // ══════════════════════════════════════════════════════════
@@ -806,7 +803,7 @@ function renderLiveTable(trades) {
 function renderLiveTableRows(trades) {
   const tb = document.getElementById('trades-tbody-live');
   if (!tb) return;
-  const list = trades;
+  const list = [...trades].reverse();
   let rows = [];
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
@@ -1016,7 +1013,7 @@ function renderBTTable(trades, isOrig) {
 function renderBTTableRows(trades) {
   const tb = document.getElementById('trades-tbody');
   if (!tb) return;
-  const list = trades;
+  const list = [...trades].reverse();
   let rows = [];
   for (let i = 0; i < list.length; i++) {
     const t = list[i]; const pnl = Number(t.pnl)||0;

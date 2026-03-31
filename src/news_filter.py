@@ -22,7 +22,7 @@ from src.logger import logger
 # ── Configuración desde .env ──────────────────────────────────────────────────
 NEWS_FILTER_ENABLED  = os.getenv("NEWS_FILTER_ENABLED", "true").lower() == "true"
 BLOCK_MINUTES_BEFORE = int(os.getenv("NEWS_BLOCK_MINUTES_BEFORE", "120"))
-CLOSE_IF_LOSS_PCT    = float(os.getenv("NEWS_CLOSE_IF_LOSS_PCT", "-1.0"))
+CLOSE_IF_LOSS_PCT    = float(os.getenv("NEWS_CLOSE_IF_LOSS_PCT", "0.0"))
 
 # ── Cache en memoria ──────────────────────────────────────────────────────────
 _cache_events: list   = []
@@ -194,7 +194,7 @@ def check_and_close_on_news(client, symbol: str, journal_load_fn, journal_close_
                 notifier._send_async(
                     f"⚠️ <b>Posición cerrada por noticias</b>\n"
                     f"📌 {symbol} | PnL: {pnl_pct:.2f}%\n"
-                    f"📰 {event_name}"
+                    f"📰 {reason}"
                 )
 
         except Exception as e:
