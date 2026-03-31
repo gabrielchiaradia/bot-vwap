@@ -221,7 +221,7 @@ class BinanceKlineStream:
             on_error   = self._on_error,
             on_close   = self._on_close,
         )
-        # run_forever bloquea hasta que se cierre la conexión
+        # run_forever bloquea hasta que se cierra la conexión
         self._ws.run_forever(
             ping_interval = 20,
             ping_timeout  = 10,
@@ -273,85 +273,99 @@ class BinanceKlineStream:
 
 
 # ══════════════════════════════════════════════════════════
-#  STREAM MULTI-TIMEFRAME
+#  STREAM DE MARK PRICE (intra-vela)
 # ══════════════════════════════════════════════════════════
 
-class MTFStream:
+class MarkPriceStream:
     """
-    Gestiona dos streams simultáneos: HTF y LTF.
-
-    La lógica de análisis se dispara cuando cierra una vela LTF.
-    El HTF se actualiza en paralelo como contexto.
-
-    Esto asegura que el análisis MTF siempre tiene el
-    contexto HTF más reciente.
+    Stream de mark price en tiempo real (~1s de frecuencia).
+    Llama a on_tick(mark_price) cada vez que llega un precio nuevo.
+    Se usa para detectar toques de banda intra-vela sin esperar el cierre.
     """
+
+    WS_URL      = "wss://fstream.binance.com/ws/{symbol}@markPrice"
+    WS_URL_TEST = "wss://stream.binancefuture.com/ws/{symbol}@markPrice"
 
     def __init__(
         self,
-        symbol:          str,
-        ltf:             str,
-        htf:             str,
-        on_señal:        Callable,
-        testnet:         bool = True,
-        buffer_ltf:      int  = 200,
-        buffer_htf:      int  = 200,
+        symbol:   str,
+        on_tick:  Callable[[float], None],
+        testnet:  bool = True,
     ):
-        self.symbol   = symbol
-        self.ltf      = ltf
-        self.htf      = htf
-        self.on_señal = on_señal
+        self.symbol   = symbol.lower()
+        self.on_tick  = on_tick
         self.testnet  = testnet
 
-        # Buffer HTF independiente (solo acumula, no dispara callback)
-        self.buffer_htf = CandleBuffer(maxlen=buffer_htf)
+        self._ws:      Optional[websocket.WebSocketApp] = None
+        self._thread:  Optional[threading.Thread] = None
+        self._running  = False
+        self._reconexiones = 0
 
-        # Stream LTF (dispara el análisis)
-        self._stream_ltf = BinanceKlineStream(
-            symbol          = symbol,
-            interval        = ltf,
-            on_candle_close = self._on_ltf_close,
-            testnet         = testnet,
-            buffer_size     = buffer_ltf,
-            candles_minimos = 50,
-        )
-
-        # Stream HTF (solo actualiza el buffer)
-        self._stream_htf = BinanceKlineStream(
-            symbol          = symbol,
-            interval        = htf,
-            on_candle_close = self._on_htf_close,
-            testnet         = testnet,
-            buffer_size     = buffer_htf,
-            candles_minimos = 20,
-        )
-
-    def iniciar(self, df_ltf_hist=None, df_htf_hist=None):
-        """Arranca ambos streams con datos históricos opcionales."""
-        self._stream_htf.iniciar(df_htf_hist)
-        time.sleep(0.5)   # Pequeño delay para que el HTF arranque primero
-        self._stream_ltf.iniciar(df_ltf_hist)
-        logger.info("MTF Stream iniciado | LTF: %s | HTF: %s", self.ltf, self.htf)
+    def iniciar(self):
+        self._running = True
+        self._thread  = threading.Thread(target=self._loop_reconexion,
+                                          daemon=True, name="markprice-stream")
+        self._thread.start()
+        logger.info("MarkPrice stream iniciado: %s (testnet=%s)",
+                    self.symbol.upper(), self.testnet)
 
     def detener(self):
-        self._stream_ltf.detener()
-        self._stream_htf.detener()
-        logger.info("MTF Stream detenido.")
+        self._running = False
+        if self._ws:
+            self._ws.close()
+        if self._thread:
+            self._thread.join(timeout=5)
+        logger.info("MarkPrice stream detenido.")
 
-    def _on_htf_close(self, df: pd.DataFrame, buffer: CandleBuffer):
-        """Actualiza el buffer HTF cuando cierra una vela."""
-        logger.debug("Vela HTF cerrada | %s | Close: $%.2f",
-                     self.htf, df["close"].iloc[-1])
+    def _loop_reconexion(self):
+        while self._running:
+            try:
+                self._conectar()
+            except Exception as e:
+                logger.error("Error en MarkPrice stream: %s", e)
 
-    def _on_ltf_close(self, df_ltf: pd.DataFrame, buffer: CandleBuffer):
-        """
-        Callback principal: cierra una vela LTF.
-        Obtiene el contexto HTF del buffer y llama on_señal.
-        """
-        df_htf = self.buffer_htf.get_dataframe()
+            if not self._running:
+                break
 
-        if df_htf.empty or len(df_htf) < 20:
-            logger.debug("Buffer HTF insuficiente, usando solo LTF.")
-            df_htf = None
+            self._reconexiones += 1
+            if self._reconexiones > 10:
+                logger.error("MarkPrice: máximo reconexiones. Deteniendo.")
+                self._running = False
+                break
 
-        self.on_señal(df_ltf, df_htf)
+            espera = min(5 * (2 ** (self._reconexiones - 1)), 60)
+            logger.warning("MarkPrice desconectado. Reconectando en %ds...", espera)
+            time.sleep(espera)
+
+    def _conectar(self):
+        url_template = self.WS_URL_TEST if self.testnet else self.WS_URL
+        url = url_template.format(symbol=self.symbol)
+        logger.debug("MarkPrice conectando a: %s", url)
+
+        self._ws = websocket.WebSocketApp(
+            url,
+            on_open    = self._on_open,
+            on_message = self._on_message,
+            on_error   = self._on_error,
+            on_close   = self._on_close,
+        )
+        self._ws.run_forever(ping_interval=20, ping_timeout=10)
+
+    def _on_open(self, ws):
+        self._reconexiones = 0
+        logger.info("MarkPrice conectado: %s", self.symbol.upper())
+
+    def _on_message(self, ws, message: str):
+        try:
+            data = json.loads(message)
+            mark = float(data.get("p", 0))
+            if mark > 0:
+                self.on_tick(mark)
+        except Exception as e:
+            logger.error("Error en MarkPrice message: %s", e)
+
+    def _on_error(self, ws, error):
+        logger.error("MarkPrice error: %s", error)
+
+    def _on_close(self, ws, code, msg):
+        logger.warning("MarkPrice cerrado: code=%s", code)
