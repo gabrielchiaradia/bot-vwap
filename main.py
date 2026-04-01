@@ -166,7 +166,11 @@ def _on_mark_price_tick(mark_price: float):
 
         # Marcar que hay entrada en curso para evitar duplicados
         # (el mark price llega ~1/s, sin esto podríamos intentar entrar múltiples veces)
-        _entrada_en_curso.set()
+        if not _entrada_en_curso.is_set():
+            _entrada_en_curso.set()
+        else:
+            return
+
 
         logger.info("[%s] 🎯 Toque de banda intra-vela | Mark: %.2f | Signal: %s | Entry: %.2f | TP: %.2f",
                     SYMBOL, mark_price, signal, entry_price, tp_vwap)
