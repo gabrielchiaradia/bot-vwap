@@ -27,7 +27,7 @@ client      = None
 _bandas_actuales: dict | None = None
 _bandas_lock      = threading.Lock()
 _entrada_en_curso = threading.Event()   # evita doble entrada intra-vela
-
+_pos_abierta:     bool = False # evita chequeo intravela
 
 def inicializar():
     """Configuracion unica al arrancar el contenedor."""
@@ -72,7 +72,9 @@ def _on_candle_close(df_velas, buffer):
         sincronizar_realidad_vs_journal(client, SYMBOL)
 
         # 3. Gestión de posición abierta
+        global _pos_abierta
         pos_abierta = get_open_position(client, SYMBOL)
+        _pos_abierta = pos_abierta is not None
         if pos_abierta:
             gestionar_resguardo_posicion(client, SYMBOL)
 
@@ -134,19 +136,7 @@ def _on_mark_price_tick(mark_price: float):
             return
 
         # ── Verificar si hay posición abierta ─────────────────────────────
-        pos_abierta = get_open_position(client, SYMBOL)
-        if pos_abierta:
-            # Evaluar cierre por noticias si corresponde
-            notifier = crear_notifier()
-            check_and_close_on_news(
-                client=client,
-                symbol=SYMBOL,
-                journal_load_fn=_load,
-                journal_close_fn=None,
-                get_position_fn=get_open_position,
-                close_position_fn=close_market_position,
-                notifier=notifier,
-            )
+        if _pos_abierta:
             return
 
         # ── Cortacircuitos diario ─────────────────────────────────────────
