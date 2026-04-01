@@ -65,6 +65,12 @@ def actualizar_bandas(df_velas: pd.DataFrame) -> dict | None:
 
         df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
         last = df_bands.iloc[-1]
+        
+        # Debug temporal: ver cuántas velas del día actual hay
+        fecha_hoy = df_bands['open_time'].dt.date.iloc[-1]
+        velas_hoy = (df_bands['open_time'].dt.date == fecha_hoy).sum()
+        logger.info("Velas de hoy (%s): %d | bar_num último: %d",
+                    fecha_hoy, velas_hoy, int(last['bar_num']))
 
         # Filtro de inicio de sesión
         if last['bar_num'] < 120:
