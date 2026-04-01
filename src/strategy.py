@@ -32,10 +32,6 @@ def calculate_vwap_bands(df, mult=2.5):
     con Desviación Estándar Ponderada por Volumen.
     """
     df = df.copy()
-    logger.info("open_time[0]=%s | open_time[-1]=%s | tz=%s",
-            df['open_time'].iloc[0] if 'open_time' in df.columns else df.index[0],
-            df['open_time'].iloc[-1] if 'open_time' in df.columns else df.index[-1],
-            df['open_time'].dt.tz if 'open_time' in df.columns else df.index.tz)
     df['date'] = pd.to_datetime(df['open_time'], utc=True).dt.date
     df['typ'] = (df['high'] + df['low'] + df['close']) / 3
     df['typ_vol'] = df['typ'] * df['volume']
