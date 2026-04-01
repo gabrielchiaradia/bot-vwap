@@ -100,42 +100,49 @@ class TelegramNotifier:
         self._send_async(msg)
 
     def heartbeat_si_corresponde(self, client, cycle_count: int):
-        global _ultimo_heartbeat, _balance_ayer
-        from datetime import datetime, timezone
+        global _ultimo_heartbeat
+        from datetime import datetime, timezone, date
 
-        # 1. Hora actual en UTC (Timezone-aware)
         ahora_utc = datetime.now(timezone.utc)
-
-        # 2. Convertimos el último envío para comparar fechas
         ultimo_dt = datetime.fromtimestamp(_ultimo_heartbeat, tz=timezone.utc)
 
-        # CONDICIÓN: Son las 19:00 UTC y no se envió hoy
         if ahora_utc.hour == 19 and ahora_utc.minute == 0 and ultimo_dt.date() < ahora_utc.date():
-            # 4. Actualizamos la marca ANTES del try para evitar spam si falla
             _ultimo_heartbeat = ahora_utc.timestamp()
             try:
                 from src.exchange import get_account_status
-                account = get_account_status(client)
+                from src.journal import _load
+                from src.config import BOT_ID
 
-                balance_actual = account['wallet_balance']
-                pnl_abierto    = account['unrealized_pnl']
+                account      = get_account_status(client)
+                pnl_abierto  = account['unrealized_pnl']
 
-                # 3. Cálculo de beneficio diario (PnL 24h)
-                # Si es la primera vez que corre, el pnl_diario será 0
-                if _balance_ayer == 0:
-                    _balance_ayer = balance_actual
-
-                pnl_diario = balance_actual - _balance_ayer
-                pct_diario = (pnl_diario / _balance_ayer * 100) if _balance_ayer > 0 else 0
+                # PnL del día desde el journal de este bot (no del balance compartido)
+                hoy = ahora_utc.date().isoformat()
+                trades = _load()
+                pnl_diario = sum(
+                    float(t.get('pnl_usdt', 0))
+                    for t in trades
+                    if t.get('bot_id') == BOT_ID
+                    and t.get('status') == 'CLOSED'
+                    and t.get('close_time', '')[:10] == hoy
+                )
+                trades_hoy = [
+                    t for t in trades
+                    if t.get('bot_id') == BOT_ID
+                    and t.get('status') == 'CLOSED'
+                    and t.get('close_time', '')[:10] == hoy
+                ]
+                wins   = sum(1 for t in trades_hoy if float(t.get('pnl_usdt', 0)) > 0)
+                losses = sum(1 for t in trades_hoy if float(t.get('pnl_usdt', 0)) <= 0)
 
                 pnl_open_emoji = "📈" if pnl_abierto >= 0 else "📉"
-                pnl_24h_emoji  = "💰" if pnl_diario >= 0 else "🧧"
+                pnl_day_emoji  = "💰" if pnl_diario >= 0 else "🧧"
 
                 msg = self._tag(
                     f"📊 <b>REPORTE DIARIO | 19:00 UTC</b>\n"
                     f"───────────────────\n"
-                    f"💰 <b>Balance Total:</b> <code>{balance_actual:.2f} USDT</code>\n"
-                    f"{pnl_24h_emoji} <b>PnL 24h:</b> <code>{pnl_diario:+.2f} USDT</code> ({pct_diario:+.2f}%)\n"
+                    f"{pnl_day_emoji} <b>PnL Hoy:</b> <code>{pnl_diario:+.2f} USDT</code>\n"
+                    f"📋 <b>Trades:</b> {len(trades_hoy)} ({wins}W / {losses}L)\n"
                     f"{pnl_open_emoji} <b>PnL Abierto:</b> <code>{pnl_abierto:+.2f} USDT</code>\n"
                     f"───────────────────\n"
                     f"🕒 <b>Uptime:</b> {cycle_count} min\n"
@@ -143,14 +150,10 @@ class TelegramNotifier:
                 )
 
                 self._send_async(msg)
-
-                # Guardamos el balance de hoy para comparar mañana
-                _balance_ayer = balance_actual
-                logger.info(f"✅ Reporte diario enviado. PnL 24h: {pnl_diario:+.2f} USDT")
+                logger.info(f"✅ Reporte diario enviado. PnL hoy: {pnl_diario:+.2f} USDT ({len(trades_hoy)} trades)")
 
             except Exception as e:
                 logger.warning(f"⚠️ Error enviando heartbeat: {e}")
-
 # ══════════════════════════════════════════════════════════
 #  FACTORY (Para que el resto del bot lo use fácil)
 # ══════════════════════════════════════════════════════════
