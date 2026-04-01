@@ -3,13 +3,17 @@
 import time
 import threading
 from src.config import SYMBOL, BOT_ID, BOT_NAME, TP_RR_RATIO, RISK_PER_TRADE, BAND_MULT
-from src.config import TIMEFRAME, LEVERAGE
+from src.config import TIMEFRAME, LEVERAGE, STRATEGY
 from src.logger import logger
 from src.exchange import (
     get_client, get_account_status, get_open_position,
     set_leverage, cancel_all_open_orders, close_market_position
 )
-from src.strategy import actualizar_bandas, evaluar_precio_intra_vela, _cooldown_activo
+from src.strategy import (
+    actualizar_bandas, evaluar_precio_intra_vela,
+    actualizar_bandas_cross, evaluar_cruce_vwap,
+    _cooldown_activo
+)
 from src.execution import ejecutar_apertura_completa, gestionar_resguardo_posicion, sincronizar_realidad_vs_journal
 from src.risk import calculate_position_size, check_drawdown_alert, can_trade
 from src.live_writer import exportar_dashboard, exportar_status
@@ -27,12 +31,14 @@ client      = None
 _bandas_actuales: dict | None = None
 _bandas_lock      = threading.Lock()
 _entrada_en_curso = threading.Event()   # evita doble entrada intra-vela
-_pos_abierta:     bool = False # evita chequeo intravela
+_pos_abierta:     bool = False          # evita chequeo intravela
+_precio_anterior: float = 0.0          # para detectar cruce del VWAP (cross strategy)
 
 def inicializar():
     """Configuracion unica al arrancar el contenedor."""
     logger.info("="*50)
     logger.info(f"Iniciando Bot {BOT_ID} para {SYMBOL} con WebSockets...")
+    logger.info(f"Estrategia: {STRATEGY.upper()} | TF: {TIMEFRAME}")
     logger.info("="*50)
     c = get_client()
     set_leverage(c, SYMBOL)
@@ -79,7 +85,10 @@ def _on_candle_close(df_velas, buffer):
             gestionar_resguardo_posicion(client, SYMBOL)
 
         # 4. Actualizar bandas para el próximo período intra-vela
-        nuevas_bandas = actualizar_bandas(df_velas)
+        if STRATEGY == "cross":
+            nuevas_bandas = actualizar_bandas_cross(df_velas)
+        else:
+            nuevas_bandas = actualizar_bandas(df_velas)
         with _bandas_lock:
             _bandas_actuales = nuevas_bandas
             # Solo limpiar si no hay PENDING_FILL activo
@@ -117,67 +126,79 @@ def _on_candle_close(df_velas, buffer):
 def _on_mark_price_tick(mark_price: float):
     """
     Callback en cada tick de mark price (~1s).
-    Evalúa si el precio toca una banda y dispara entrada inmediata.
-    Este es el punto donde se replica la lógica del backtest:
-    entrar al momento del toque, no al cierre de vela.
+    Estrategia reversion: evalúa toque de banda.
+    Estrategia cross: evalúa cruce del VWAP.
     """
-    global _bandas_actuales
+    global _bandas_actuales, _precio_anterior
 
-    # Si ya hay una entrada en curso en esta vela, no hacer nada
     if _entrada_en_curso.is_set():
         return
 
-    # Leer bandas con lock mínimo
     with _bandas_lock:
         bandas = _bandas_actuales
 
     if not bandas:
+        _precio_anterior = mark_price
         return
 
-    # Verificar filtros rápidos antes de evaluar precio
     try:
         # ── Filtro de noticias ────────────────────────────────────────────
-        news_blocked, news_reason = is_news_blocked(SYMBOL)
+        news_blocked, _ = is_news_blocked(SYMBOL)
         if news_blocked:
+            _precio_anterior = mark_price
             return
 
         # ── Verificar si hay posición abierta ─────────────────────────────
         if _pos_abierta:
+            _precio_anterior = mark_price
             return
 
         # ── Cortacircuitos diario ─────────────────────────────────────────
         historial = _load()
         if not can_trade(historial):
+            _precio_anterior = mark_price
             return
 
         # ── Cooldown post-trade ───────────────────────────────────────────
         if _cooldown_activo():
+            _precio_anterior = mark_price
             return
 
-        # ── Evaluar toque de banda ────────────────────────────────────────
-        signal, entry_price, tp_vwap = evaluar_precio_intra_vela(mark_price, bandas)
+        # ── Evaluar señal según estrategia ────────────────────────────────
+        if STRATEGY == "cross":
+            if _precio_anterior <= 0:
+                _precio_anterior = mark_price
+                return
+            signal, entry_price, tp_price, sl_price = evaluar_cruce_vwap(
+                mark_price, bandas, _precio_anterior
+            )
+        else:
+            signal, entry_price, tp_vwap = evaluar_precio_intra_vela(mark_price, bandas)
+            if signal:
+                reward   = abs(tp_vwap - entry_price)
+                dist_sl  = reward / TP_RR_RATIO
+                sl_price = entry_price - dist_sl if signal == "LONG" else entry_price + dist_sl
+                tp_price = tp_vwap
+            else:
+                sl_price = tp_price = None
+
+        # Actualizar precio anterior para el próximo tick
+        _precio_anterior = mark_price
 
         if not signal:
             return
 
-        # Marcar que hay entrada en curso para evitar duplicados
-        # (el mark price llega ~1/s, sin esto podríamos intentar entrar múltiples veces)
+        # Marcar entrada en curso (atómico)
         if not _entrada_en_curso.is_set():
             _entrada_en_curso.set()
         else:
             return
 
+        logger.info("[%s] 🎯 Señal %s | Mark: %.2f | Signal: %s | Entry: %.2f | TP: %.2f | SL: %.2f",
+                    SYMBOL, STRATEGY.upper(), mark_price, signal, entry_price, tp_price, sl_price)
 
-        logger.info("[%s] 🎯 Toque de banda intra-vela | Mark: %.2f | Signal: %s | Entry: %.2f | TP: %.2f",
-                    SYMBOL, mark_price, signal, entry_price, tp_vwap)
-
-        # ── Calcular SL y tamaño ──────────────────────────────────────────
+        # ── Calcular tamaño ───────────────────────────────────────────────
         account = get_account_status(client)
-
-        reward  = abs(tp_vwap - entry_price)
-        dist_sl = reward / TP_RR_RATIO
-        sl_price = entry_price - dist_sl if signal == "LONG" else entry_price + dist_sl
-
         qty = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
 
         # Cap por margen disponible
@@ -185,8 +206,7 @@ def _on_mark_price_tick(mark_price: float):
         max_notional = account['available'] * LEVERAGE * 0.8
         if notional > max_notional:
             qty_capped = round(max_notional / entry_price, 3)
-            logger.warning("[%s] Qty capado por margen: %.4f -> %.4f",
-                           SYMBOL, qty, qty_capped)
+            logger.warning("[%s] Qty capado por margen: %.4f -> %.4f", SYMBOL, qty, qty_capped)
             qty = qty_capped
 
         if qty <= 0:
@@ -195,7 +215,7 @@ def _on_mark_price_tick(mark_price: float):
             return
 
         ejecutar_apertura_completa(
-            client, SYMBOL, signal, entry_price, sl_price, tp_vwap,
+            client, SYMBOL, signal, entry_price, sl_price, tp_price,
             qty, RISK_PER_TRADE, balance_at_open=account['wallet_balance']
         )
 
@@ -214,13 +234,19 @@ def main():
 
     # ── Stream de velas (cierre de vela → actualizar bandas y auditoría) ──
     logger.info("Conectando al WebSocket de velas...")
+    # candles_minimos: en 1m necesitamos 120 de bar_num + margen
+    # en 5m son 5 velas de inicio de sesión + historial del día
+    tf_min_map   = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60}
+    tf_min_val   = tf_min_map.get(TIMEFRAME, 1)
+    candles_min  = max(50, int(1440 / tf_min_val) + 10)  # velas de 1 día + margen
+
     stream_kline = BinanceKlineStream(
         symbol          = SYMBOL,
         interval        = TIMEFRAME,
         on_candle_close = _on_candle_close,
         testnet         = True,
-        buffer_size     = 1500,
-        candles_minimos = 130,   # necesitamos 120 de bar_num + margen
+        buffer_size     = max(1500, candles_min + 100),
+        candles_minimos = candles_min,
     )
     stream_kline.iniciar(df_historico)
 

@@ -229,13 +229,25 @@ def sincronizar_realidad_vs_journal(client, symbol):
                     )
                     modified = True
                 else:
-                    # Cancelar los demás PENDING_FILL duplicados
-                    logger.warning(f"[{symbol}] PENDING_FILL duplicado cancelado: {t['trade_id']}")
-                    t['status'] = 'CANCELLED'
-                    t['close_time'] = ahora
-                    t['result'] = 'CANCELLED'
-                    modified = True
-                    # NO activa cooldown — no hubo trade real
+                    # Verificar si la orden sigue activa en Binance antes de cancelar
+                    try:
+                        ordenes_abiertas = client.futures_get_open_orders(symbol=symbol)
+                        sigue_activa = any(
+                            abs(float(o.get('price', 0)) - float(t.get('entry_price', 0))) < 0.02
+                            for o in ordenes_abiertas
+                            if o.get('side') == ('BUY' if t['direction'] == 'LONG' else 'SELL')
+                        )
+                    except Exception:
+                        sigue_activa = True  # ante la duda, no cancelar
+
+                    if sigue_activa:
+                        logger.info(f"[{symbol}] PENDING_FILL sigue activo en Binance — esperando fill.")
+                    else:
+                        logger.warning(f"[{symbol}] PENDING_FILL cancelado/expirado en Binance: {t['trade_id']}")
+                        t['status'] = 'CANCELLED'
+                        t['close_time'] = ahora
+                        t['result'] = 'CANCELLED'
+                        modified = True
 
             if modified:
                 _save(all_trades)

@@ -162,6 +162,102 @@ def evaluar_precio_intra_vela(mark_price: float, bandas: dict) -> tuple:
     return None, None, None
 
 
+def actualizar_bandas_cross(df_velas: pd.DataFrame) -> dict | None:
+    """
+    Igual que actualizar_bandas() pero guarda también el close anterior
+    para detectar el cruce del VWAP en el siguiente tick.
+    Retorna None si no hay suficientes datos o los filtros no pasan.
+    """
+    try:
+        from src.config import TRADING_WINDOW
+        df = df_velas.copy()
+        if 'open_time' not in df.columns:
+            df['open_time'] = pd.to_datetime(df.index, utc=True)
+        else:
+            df['open_time'] = pd.to_datetime(df['open_time'], utc=True)
+
+        df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
+        last = df_bands.iloc[-1]
+        prev = df_bands.iloc[-2]
+
+        fecha_hoy = df_bands['open_time'].dt.date.iloc[-1]
+        velas_hoy = (df_bands['open_time'].dt.date == fecha_hoy).sum()
+        logger.info("Velas de hoy (%s): %d | bar_num último: %d",
+                    fecha_hoy, velas_hoy, int(last['bar_num']))
+
+        # Filtro de inicio de sesión — primeras 5 velas del TF
+        if last['bar_num'] < 5:
+            return None
+
+        # Filtro de día de semana
+        if TRADING_DAYS == 'WORKDAYS' and pd.Timestamp(last['open_time']).weekday() >= 5:
+            return None
+
+        # Filtro de ventana horaria
+        hora_utc = pd.Timestamp(last['open_time']).hour
+        if TRADING_WINDOW and TRADING_WINDOW != "0-24":
+            partes = TRADING_WINDOW.split("-")
+            h_ini, h_fin = int(partes[0]), int(partes[1])
+            if not (h_ini <= hora_utc < h_fin):
+                return None
+
+        bandas = {
+            "upper":      float(last['upper']),
+            "lower":      float(last['lower']),
+            "vwap":       float(last['vwap']),
+            "vwap_prev":  float(prev['vwap']),
+            "close_prev": float(prev['close']) if 'close' in prev else float(last['close']),
+            "bar_num":    int(last['bar_num']),
+            "updated_at": datetime.now(timezone.utc),
+        }
+        logger.info("Bandas Cross | Upper: %.2f | Lower: %.2f | VWAP: %.2f",
+                    bandas["upper"], bandas["lower"], bandas["vwap"])
+        return bandas
+
+    except Exception as e:
+        logger.error("Error en actualizar_bandas_cross: %s", e)
+        return None
+
+
+def evaluar_cruce_vwap(mark_price: float, bandas: dict, precio_anterior: float) -> tuple:
+    """
+    Detecta cruce del VWAP en tiempo real comparando el precio anterior
+    con el precio actual.
+
+    LONG:  precio_anterior < vwap y mark_price >= vwap
+    SHORT: precio_anterior > vwap y mark_price <= vwap
+
+    TP = banda opuesta, SL = banda del mismo lado.
+    Retorna: (signal, entry_price, tp_price, sl_price) o (None, None, None, None)
+    """
+    if not bandas or precio_anterior <= 0:
+        return None, None, None, None
+
+    upper = bandas["upper"]
+    lower = bandas["lower"]
+    vwap  = bandas["vwap"]
+
+    # LONG: cruce hacia arriba
+    if precio_anterior < vwap and mark_price >= vwap:
+        entry = vwap
+        tp    = upper
+        sl    = lower
+        reward = abs(tp - entry)
+        if reward / entry > 0.001:  # mínimo 0.1% de reward
+            return "LONG", entry, tp, sl
+
+    # SHORT: cruce hacia abajo
+    elif precio_anterior > vwap and mark_price <= vwap:
+        entry = vwap
+        tp    = lower
+        sl    = upper
+        reward = abs(entry - tp)
+        if reward / entry > 0.001:
+            return "SHORT", entry, tp, sl
+
+    return None, None, None, None
+
+
 def _cooldown_activo() -> bool:
     """Verifica si el cooldown post-trade está activo."""
     try:

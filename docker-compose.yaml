@@ -76,6 +76,28 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ── Bot SOL2 (VWAP Cross 13-20 UTC) ───────────────────
+  # Estrategia: VWAP Cross en 5m, ventana 13-20 UTC
+  # Activar: descomentar y crear .env.sol2
+  #vwap-sol2:
+  #  build: .
+  #  container_name: vwap-sol2
+  #  restart: unless-stopped
+  #  env_file: .env.sol2
+  #  user: "1000:1000"
+  #  environment:
+  #    - TZ=America/Argentina/Buenos_Aires
+  #    - BOT_ID=SOL2
+  #    - PYTHONPATH=/app
+  #  volumes:
+  #    - .:/app
+  #    - ./dashboard/data:/app/logs
+  #  logging:
+  #    driver: json-file
+  #    options:
+  #      max-size: "10m"
+  #      max-file: "3"
+
   # ── Dashboard (Nginx) ──────────────────────────────────
   vwap-dashboard:
     image: nginx:latest
