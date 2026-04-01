@@ -32,7 +32,7 @@ def calculate_vwap_bands(df, mult=2.5):
     con Desviación Estándar Ponderada por Volumen.
     """
     df = df.copy()
-    df['date'] = df['open_time'].dt.date
+    df['date'] = pd.to_datetime(df['open_time'], utc=True).dt.date
     df['typ'] = (df['high'] + df['low'] + df['close']) / 3
     df['typ_vol'] = df['typ'] * df['volume']
     df['cum_vol'] = df.groupby('date')['volume'].cumsum()
