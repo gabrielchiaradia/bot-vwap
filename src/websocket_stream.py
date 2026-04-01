@@ -252,7 +252,7 @@ class BinanceKlineStream:
                     return
 
                 # Llamar al callback con el DataFrame actualizado
-                df = self.buffer.get_dataframe()
+                df = self.buffer.get_dataframe(n=1500)
                 if not df.empty:
                     try:
                         self.on_candle_close(df, self.buffer)
