@@ -82,8 +82,14 @@ def _on_candle_close(df_velas, buffer):
         nuevas_bandas = actualizar_bandas(df_velas)
         with _bandas_lock:
             _bandas_actuales = nuevas_bandas
-            # Resetear flag de entrada para permitir nueva entrada en esta vela
-            _entrada_en_curso.clear()
+            # Solo limpiar si no hay PENDING_FILL activo
+            historial = _load()
+            hay_pending = any(
+                t.get('symbol') == SYMBOL and t.get('status') == 'PENDING_FILL'
+                for t in historial
+            )
+            if not hay_pending:
+                _entrada_en_curso.clear()
 
         if nuevas_bandas:
             logger.info("Bandas | Upper: %.2f | Lower: %.2f | VWAP: %.2f",
