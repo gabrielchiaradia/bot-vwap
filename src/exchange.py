@@ -62,14 +62,17 @@ def place_limit_order(client, symbol, side, price, quantity):
         step     = get_step_size(client, symbol)
         quantity = _round_tick(float(quantity), step)
 
+        position_side = "LONG" if side == SIDE_BUY else "SHORT"
         order = client.futures_create_order(
             symbol=symbol,
             side=side,
+            positionSide=position_side,
             type=FUTURE_ORDER_TYPE_LIMIT,
-            timeInForce=TIME_IN_FORCE_GTX,  # Post Only
+            timeInForce=TIME_IN_FORCE_GTX,
             quantity=quantity,
             price=price
         )
+
         logger.info(f"[{BOT_ID}] ✅ Orden LIMIT {side} colocada en {price}")
         return order
 
@@ -159,9 +162,11 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
                 except Exception:
                     pass
 
+        position_side = "LONG" if side == SIDE_BUY else "SHORT"
         client.futures_create_order(
             symbol=symbol,
             side=close_side,
+            positionSide=position_side,
             type=FUTURE_ORDER_TYPE_STOP_MARKET,
             stopPrice=sl_price,
             closePosition=True
@@ -169,6 +174,7 @@ def place_sl_tp(client, symbol, side, qty, sl_price, tp_price):
         client.futures_create_order(
             symbol=symbol,
             side=close_side,
+            positionSide=position_side,
             type=FUTURE_ORDER_TYPE_TAKE_PROFIT_MARKET,
             stopPrice=tp_price,
             closePosition=True
@@ -229,17 +235,17 @@ def close_market_position(client, symbol):
             logger.warning(f"[{BOT_ID}] Error cancelando SL/TP pre-cierre: {e}")
 
         # 3. Cerrar a mercado
-        close_side = SIDE_SELL if side == "LONG" else SIDE_BUY
+        close_side    = SIDE_SELL if side == "LONG" else SIDE_BUY
+        position_side = side  # "LONG" o "SHORT"
         qty  = abs(amt)
         step = get_step_size(client, symbol)
         qty  = _round_tick(qty, step)
-
         client.futures_create_order(
             symbol=symbol,
             side=close_side,
+            positionSide=position_side,
             type=FUTURE_ORDER_TYPE_MARKET,
             quantity=qty,
-            reduceOnly=True,
         )
         logger.info(
             f"[{BOT_ID}] ✅ Posición {side} cerrada a mercado por filtro de noticias "
