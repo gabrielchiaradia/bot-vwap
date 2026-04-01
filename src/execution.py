@@ -210,16 +210,16 @@ def sincronizar_realidad_vs_journal(client, symbol):
         only_open_in_journal = [t for t in open_in_journal if t.get('status') == 'OPEN']
 
         if pending_in_journal:
+            promovido = False
             for t in pending_in_journal:
-                if pos_real:
-                    # La posición existe en Binance → la orden se llenó mientras esperábamos
+                if pos_real and not promovido:
+                    # Solo promover el primero
                     logger.info(f"[{symbol}] ✅ Orden PENDING_FILL ahora ejecutada. Promoviendo a OPEN.")
                     t['status'] = 'OPEN'
-                    # Colocar SL/TP si no los tiene todavía
+                    promovido = True
                     try:
                         side = "BUY" if t['direction'] == "LONG" else "SELL"
                         place_sl_tp(client, symbol, side, float(t['quantity']), float(t['sl_price']), float(t['tp_price']))
-                        logger.info(f"[{symbol}] ✅ SL/TP colocados para trade promovido.")
                     except Exception as e:
                         logger.error(f"[{symbol}] Error colocando SL/TP en promoción: {e}")
                     crear_notifier().alert_trade_open(
@@ -229,12 +229,11 @@ def sincronizar_realidad_vs_journal(client, symbol):
                     )
                     modified = True
                 else:
-                    # No hay posición en Binance → la orden nunca se ejecutó, se canceló sola
-                    logger.info(f"[{symbol}] Orden PENDING_FILL cancelada/expirada en Binance. Limpiando journal silenciosamente.")
+                    # Cancelar los demás PENDING_FILL duplicados
+                    logger.warning(f"[{symbol}] PENDING_FILL duplicado cancelado: {t['trade_id']}")
                     t['status'] = 'CANCELLED'
                     t['close_time'] = ahora
                     t['result'] = 'CANCELLED'
-                    cancel_all_open_orders(client, symbol)
                     modified = True
                     # NO activa cooldown — no hubo trade real
 
