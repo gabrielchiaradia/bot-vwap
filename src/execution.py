@@ -243,10 +243,26 @@ def sincronizar_realidad_vs_journal(client, symbol):
                     if sigue_activa:
                         logger.info(f"[{symbol}] PENDING_FILL sigue activo en Binance — esperando fill.")
                     else:
-                        logger.warning(f"[{symbol}] PENDING_FILL cancelado/expirado en Binance: {t['trade_id']}")
-                        t['status'] = 'CANCELLED'
-                        t['close_time'] = ahora
-                        t['result'] = 'CANCELLED'
+                        # Recheck final: puede haberse llenado justo ahora
+                        pos_recheck = get_open_position(client, symbol)
+                        if pos_recheck:
+                            logger.info(f"[{symbol}] ✅ PENDING_FILL ejecutado en recheck. Promoviendo a OPEN.")
+                            t['status'] = 'OPEN'
+                            try:
+                                side = "BUY" if t['direction'] == "LONG" else "SELL"
+                                place_sl_tp(client, symbol, side, float(t['quantity']), float(t['sl_price']), float(t['tp_price']))
+                            except Exception as e:
+                                logger.error(f"[{symbol}] Error colocando SL/TP en recheck: {e}")
+                            crear_notifier().alert_trade_open(
+                                symbol, t['direction'], float(t['entry_price']),
+                                float(t['sl_price']), float(t['tp_price']),
+                                float(t['quantity']), float(t['risk_pct'])
+                            )
+                        else:
+                            logger.warning(f"[{symbol}] PENDING_FILL cancelado/expirado en Binance: {t['trade_id']}")
+                            t['status'] = 'CANCELLED'
+                            t['close_time'] = ahora
+                            t['result'] = 'CANCELLED'
                         modified = True
 
             if modified:
