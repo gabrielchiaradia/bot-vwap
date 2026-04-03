@@ -358,7 +358,6 @@ class MarkPriceStream:
     def _on_message(self, ws, message: str):
         try:
             data = json.loads(message)
-            logger.info("MarkPrice raw: %s", message[:100])  # ← agregar esta línea
             mark = float(data.get("p", 0))
             if mark > 0:
                 self.on_tick(mark)
