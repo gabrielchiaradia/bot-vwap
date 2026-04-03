@@ -172,6 +172,10 @@ def _on_mark_price_tick(mark_price: float):
             signal, entry_price, tp_price, sl_price = evaluar_cruce_vwap(
                 mark_price, bandas, _precio_anterior
             )
+            if signal:
+                logger.info(f"[{SYMBOL}] 🎯 Cruce detectado: {signal} | prev={_precio_anterior:.2f} | now={mark_price:.2f} | vwap={bandas['vwap']:.2f}")
+            else:
+                logger.debug(f"[{SYMBOL}] tick cross | prev={_precio_anterior:.2f} | now={mark_price:.2f} | vwap={bandas['vwap']:.2f}")
         else:
             signal, entry_price, tp_vwap = evaluar_precio_intra_vela(mark_price, bandas)
             if signal:
