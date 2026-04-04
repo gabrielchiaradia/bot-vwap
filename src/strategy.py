@@ -224,7 +224,7 @@ def evaluar_cruce_vwap(mark_price: float, bandas: dict, precio_anterior: float) 
 
     # Filtro: bandas demasiado comprimidas (menos de 1% del precio)
     # Evita operar al inicio del día cuando las bandas están colapsadas
-    if (upper - lower) / vwap < 0.01:
+    if (upper - lower) / vwap < 0.02:
         return None, None, None, None
 
     # LONG: cruce hacia arriba
