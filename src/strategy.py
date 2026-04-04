@@ -56,7 +56,6 @@ def actualizar_bandas(df_velas: pd.DataFrame) -> dict | None:
     Retorna None si no hay suficientes datos o los filtros no pasan.
     """
     try:
-        # Reconstruir open_time desde el índice si es necesario
         df = df_velas.copy()
         if 'open_time' not in df.columns:
             df['open_time'] = pd.to_datetime(df.index, utc=True)
@@ -65,22 +64,18 @@ def actualizar_bandas(df_velas: pd.DataFrame) -> dict | None:
 
         df_bands = calculate_vwap_bands(df, mult=BAND_MULT)
         last = df_bands.iloc[-1]
-        
-        # Debug temporal: ver cuántas velas del día actual hay
+
         fecha_hoy = df_bands['open_time'].dt.date.iloc[-1]
         velas_hoy = (df_bands['open_time'].dt.date == fecha_hoy).sum()
         logger.info("Velas de hoy (%s): %d | bar_num último: %d",
                     fecha_hoy, velas_hoy, int(last['bar_num']))
 
-        # Filtro de inicio de sesión
         if last['bar_num'] < 120:
             return None
 
-        # Filtro de día de semana
         if TRADING_DAYS == 'WORKDAYS' and pd.Timestamp(last['open_time']).weekday() >= 5:
             return None
 
-        # Filtro anti-latigazo VWAP
         vwap_now  = last['vwap']
         vwap_prev = df_bands['vwap'].iloc[-4]
         vwap_change = abs((vwap_now - vwap_prev) / vwap_prev)
@@ -88,17 +83,16 @@ def actualizar_bandas(df_velas: pd.DataFrame) -> dict | None:
             logger.debug("Bandas no actualizadas: salto VWAP (%.4f)", vwap_change)
             return None
 
-        # Filtro anti-expansión de bandas
         if not pd.isna(last['avg_band_width']):
             if last['band_width'] > last['avg_band_width'] * 2.0:
                 logger.debug("Bandas no actualizadas: expansión violenta")
                 return None
 
         bandas = {
-            "upper":     float(last['upper']),
-            "lower":     float(last['lower']),
-            "vwap":      float(last['vwap']),
-            "bar_num":   int(last['bar_num']),
+            "upper":      float(last['upper']),
+            "lower":      float(last['lower']),
+            "vwap":       float(last['vwap']),
+            "bar_num":    int(last['bar_num']),
             "updated_at": datetime.now(timezone.utc),
         }
         logger.debug("Bandas actualizadas | Upper: %.2f | Lower: %.2f | VWAP: %.2f",
@@ -116,10 +110,6 @@ def evaluar_precio_intra_vela(mark_price: float, bandas: dict) -> tuple:
     toca una banda y genera señal de entrada inmediata.
 
     Retorna: (signal, entry_price, tp_vwap) o (None, None, None)
-
-    A diferencia de get_vwap_signals(), NO usa high/low de la vela cerrada
-    sino el precio en tiempo real — esto replica la lógica del backtest
-    donde la entrada ocurre al momento del toque, no al cierre.
     """
     if not bandas:
         return None, None, None
@@ -128,15 +118,12 @@ def evaluar_precio_intra_vela(mark_price: float, bandas: dict) -> tuple:
     lower = bandas["lower"]
     vwap  = bandas["vwap"]
 
-    # SHORT: precio toca o supera banda superior
     if mark_price >= upper:
         entry_price = upper
         tp = vwap
         reward = abs(entry_price - tp)
         profit_pct = (reward / entry_price) * 100
         if profit_pct > 0.15:
-            # Verificar que el precio no se alejó demasiado de la banda
-            # (evita entrar cuando ya rebotó mucho)
             if mark_price <= upper * 1.002:
                 return "SHORT", entry_price, tp
             else:
@@ -144,14 +131,12 @@ def evaluar_precio_intra_vela(mark_price: float, bandas: dict) -> tuple:
         else:
             logger.debug("SHORT bloqueado: premio muy chico (%.3f%%)", profit_pct)
 
-    # LONG: precio toca o cae bajo banda inferior
     elif mark_price <= lower:
         entry_price = lower
         tp = vwap
         reward = abs(tp - entry_price)
         profit_pct = (reward / entry_price) * 100
         if profit_pct > 0.15:
-            # Verificar que el precio no se alejó demasiado
             if mark_price >= lower * 0.998:
                 return "LONG", entry_price, tp
             else:
@@ -237,6 +222,11 @@ def evaluar_cruce_vwap(mark_price: float, bandas: dict, precio_anterior: float) 
     lower = bandas["lower"]
     vwap  = bandas["vwap"]
 
+    # Filtro: bandas demasiado comprimidas (menos de 1% del precio)
+    # Evita operar al inicio del día cuando las bandas están colapsadas
+    if (upper - lower) / vwap < 0.01:
+        return None, None, None, None
+
     # LONG: cruce hacia arriba
     if precio_anterior < vwap and mark_price >= vwap:
         entry = vwap
@@ -296,11 +286,9 @@ def get_vwap_signals(df):
     if TRADING_DAYS == 'WORKDAYS' and last['open_time'].weekday() >= 5:
         return None, None, None
 
-    # Cooldown
     if _cooldown_activo():
         return None, None, None
 
-    # Anti-latigazos
     vwap_now  = last['vwap']
     vwap_prev = df['vwap'].iloc[-4]
     vwap_change = abs((vwap_now - vwap_prev) / vwap_prev)
