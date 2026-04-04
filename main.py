@@ -222,7 +222,15 @@ def _on_mark_price_tick(mark_price: float):
             client, SYMBOL, signal, entry_price, sl_price, tp_price,
             qty, RISK_PER_TRADE, balance_at_open=account['wallet_balance']
         )
-
+        # Liberar solo si no quedó PENDING_FILL — si quedó, bloqueamos
+        # hasta que el sincronizador lo resuelva en el próximo ciclo
+        historial = _load()
+        hay_pending = any(
+            t.get('symbol') == SYMBOL and t.get('status') == 'PENDING_FILL'
+            for t in historial
+        )
+        if not hay_pending:
+            _entrada_en_curso.clear()
     except Exception as e:
         logger.error(f"Error en _on_mark_price_tick: {e}", exc_info=True)
         _entrada_en_curso.clear()
