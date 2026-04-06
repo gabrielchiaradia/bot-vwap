@@ -176,7 +176,10 @@ def _on_candle_close(df_velas, buffer):
             t.get('symbol') == SYMBOL and t.get('status') == 'PENDING_FILL'
             for t in historial
         )
-        if not hay_pending:
+        # Solo limpiar si no hay PENDING_FILL Y no hay thread de ejecución activo
+        hay_ejecutando = any(t.name == "ejecutar-apertura" and t.is_alive()
+                             for t in threading.enumerate())
+        if not hay_pending and not hay_ejecutando:
             with _entrada_lock:
                 _entrada_en_curso = False
 
