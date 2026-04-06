@@ -7,7 +7,7 @@ from src.logger import logger
 
 def obtener_señal_actual(client):
     """
-    Centraliza la descarga de datos, el c├ílculo de bandas y la generaci├│n de se├▒al.
+    Centraliza la descarga de datos, el cálculo de bandas y la generación de señal.
     Retorna: (signal, entry_price, tp_vwap) o (None, None, None) si falla.
     NOTA: Solo se usa en modo polling. En modo WebSocket usar
           actualizar_bandas() + evaluar_precio_intra_vela().
@@ -28,8 +28,8 @@ def obtener_señal_actual(client):
 
 def calculate_vwap_bands(df, mult=2.5):
     """
-    C├ílculo de VWAP Institucional Anclado (Daily Reset)
-    con Desviaci├│n Est├índar Ponderada por Volumen.
+    Cálculo de VWAP Institucional Anclado (Daily Reset)
+    con Desviación Estándar Ponderada por Volumen.
     """
     df = df.copy()
     df['date'] = pd.to_datetime(df['open_time'], utc=True).dt.date
@@ -85,7 +85,7 @@ def actualizar_bandas(df_velas: pd.DataFrame) -> dict | None:
 
         if not pd.isna(last['avg_band_width']):
             if last['band_width'] > last['avg_band_width'] * 2.0:
-                logger.debug("Bandas no actualizadas: expansi├│n violenta")
+                logger.debug("Bandas no actualizadas: expansión violenta")
                 return None
 
         bandas = {
@@ -106,9 +106,8 @@ def actualizar_bandas(df_velas: pd.DataFrame) -> dict | None:
 
 def evaluar_precio_intra_vela(mark_price: float, bandas: dict) -> tuple:
     """
-    Llamado en cada tick de mark price. Eval├║a si el precio actual
-    toca una banda y genera se├▒al de entrada inmediata.
-
+    Llamado en cada tick de mark price. Evalúa si el precio actual
+    toca una banda y genera señal de entrada inmediata.
     Retorna: (signal, entry_price, tp_vwap) o (None, None, None)
     """
     if not bandas:
@@ -149,7 +148,7 @@ def evaluar_precio_intra_vela(mark_price: float, bandas: dict) -> tuple:
 
 def actualizar_bandas_cross(df_velas: pd.DataFrame) -> dict | None:
     """
-    Igual que actualizar_bandas() pero guarda tambi├®n el close anterior
+    Igual que actualizar_bandas() pero guarda también el close anterior
     para detectar el cruce del VWAP en el siguiente tick.
     Retorna None si no hay suficientes datos o los filtros no pasan.
     """
@@ -170,15 +169,12 @@ def actualizar_bandas_cross(df_velas: pd.DataFrame) -> dict | None:
         logger.info("Velas de hoy (%s): %d | bar_num  último: %d",
                     fecha_hoy, velas_hoy, int(last['bar_num']))
 
-        # Filtro de inicio de sesi├│n ÔÇö primeras 5 velas del TF
         if last['bar_num'] < 5:
             return None
 
-        # Filtro de d├¡a de semana
         if TRADING_DAYS == 'WORKDAYS' and pd.Timestamp(last['open_time']).weekday() >= 5:
             return None
 
-        # Filtro de ventana horaria
         hora_utc = pd.Timestamp(last['open_time']).hour
         if TRADING_WINDOW and TRADING_WINDOW != "0-24":
             partes = TRADING_WINDOW.split("-")
@@ -212,7 +208,13 @@ def evaluar_cruce_vwap(mark_price: float, bandas: dict, precio_anterior: float) 
     LONG:  precio_anterior < vwap y mark_price >= vwap
     SHORT: precio_anterior > vwap y mark_price <= vwap
 
-    TP = banda opuesta, SL = banda del mismo lado.
+    SL = banda del mismo lado del cruce.
+    TP = RR 1:1 simétrico al SL.
+
+    Filtro de reward mínimo por par (basado en BAND_MULT real y análisis histórico):
+      BTC (BAND_MULT=1.5): mediana dist 0.40%, máx día 0.78% → mínimo 0.3%
+      SOL (BAND_MULT=2.0): mediana dist 1.02%, máx día 1.11% → mínimo 0.7%
+
     Retorna: (signal, entry_price, tp_price, sl_price) o (None, None, None, None)
     """
     if not bandas or precio_anterior <= 0:
@@ -222,29 +224,43 @@ def evaluar_cruce_vwap(mark_price: float, bandas: dict, precio_anterior: float) 
     lower = bandas["lower"]
     vwap  = bandas["vwap"]
 
+    # Umbral mínimo de reward por par
+    if "BTC" in SYMBOL:
+        MIN_REWARD_PCT = 0.003   # 0.3% — máximo día ~0.78% con BAND_MULT=1.5
+    elif "SOL" in SYMBOL:
+        MIN_REWARD_PCT = 0.007   # 0.7% — mediana ~1.02% con BAND_MULT=2.0
+    else:
+        MIN_REWARD_PCT = 0.005   # 0.5% default
+
     # LONG: cruce hacia arriba
     if precio_anterior < vwap and mark_price >= vwap:
         entry = vwap
-        sl    = lower  # Banda opuesta
+        sl    = lower
         distancia_riesgo = entry - sl
-        tp    = entry + distancia_riesgo  # RR 1:1 fijo
-        
+        if distancia_riesgo / entry < MIN_REWARD_PCT:
+            logger.debug("LONG cross bloqueado: distancia %.3f%% < minimo %.3f%%",
+                         distancia_riesgo / entry * 100, MIN_REWARD_PCT * 100)
+            return None, None, None, None
+        tp = entry + distancia_riesgo  # RR 1:1
         return "LONG", entry, tp, sl
 
     # SHORT: cruce hacia abajo
     elif precio_anterior > vwap and mark_price <= vwap:
         entry = vwap
-        sl    = upper  # Banda opuesta
+        sl    = upper
         distancia_riesgo = sl - entry
-        tp    = entry - distancia_riesgo  # RR 1:1 fijo
-        
+        if distancia_riesgo / entry < MIN_REWARD_PCT:
+            logger.debug("SHORT cross bloqueado: distancia %.3f%% < minimo %.3f%%",
+                         distancia_riesgo / entry * 100, MIN_REWARD_PCT * 100)
+            return None, None, None, None
+        tp = entry - distancia_riesgo  # RR 1:1
         return "SHORT", entry, tp, sl
 
     return None, None, None, None
 
 
 def _cooldown_activo() -> bool:
-    """Verifica si el cooldown post-trade est├í activo."""
+    """Verifica si el cooldown post-trade está activo."""
     try:
         from src.journal import _load
         from src.config import BOT_ID
@@ -266,7 +282,7 @@ def _cooldown_activo() -> bool:
 
 def get_vwap_signals(df):
     """
-    Eval├║a la ├║ltima vela cerrada replicando la l├│gica EXACTA del backtest.
+    Evalúa la última vela cerrada replicando la lógica EXACTA del backtest.
     Mantenida para compatibilidad con modo polling.
     En modo WebSocket usar evaluar_precio_intra_vela() en su lugar.
     """
@@ -293,7 +309,7 @@ def get_vwap_signals(df):
 
     if not pd.isna(last['avg_band_width']):
         if last['band_width'] > (last['avg_band_width'] * 2.0):
-            print(f"Bloqueo: Expansi├│n violenta de bandas (Ancho: {last['band_width']:.2f})")
+            print(f"Bloqueo: Expansión violenta de bandas (Ancho: {last['band_width']:.2f})")
             return None, None, None
 
     tp = last['vwap']
