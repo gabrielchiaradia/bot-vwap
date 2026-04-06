@@ -117,31 +117,42 @@ def evaluar_precio_intra_vela(mark_price: float, bandas: dict) -> tuple:
     lower = bandas["lower"]
     vwap  = bandas["vwap"]
 
+    # Umbral mínimo de reward por par para reversion
+    # Basado en análisis histórico de dist banda-VWAP:
+    #   BTC (BAND_MULT=1.5): mediana 0.40%, máx 0.78% → mínimo 0.25%
+    #   SOL (BAND_MULT=2.0): mediana 1.01%, máx 1.11% → mínimo 0.50%
+    if "BTC" in SYMBOL:
+        MIN_PROFIT_PCT = 0.25
+    elif "SOL" in SYMBOL:
+        MIN_PROFIT_PCT = 0.50
+    else:
+        MIN_PROFIT_PCT = 0.30  # default
+
     if mark_price >= upper:
         entry_price = upper
         tp = vwap
         reward = abs(entry_price - tp)
         profit_pct = (reward / entry_price) * 100
-        if profit_pct > 0.15:
+        if profit_pct > MIN_PROFIT_PCT:
             if mark_price <= upper * 1.002:
                 return "SHORT", entry_price, tp
             else:
                 logger.debug("SHORT bloqueado: precio muy lejos de banda (%.4f > upper*1.002)", mark_price)
         else:
-            logger.debug("SHORT bloqueado: premio muy chico (%.3f%%)", profit_pct)
+            logger.debug("SHORT bloqueado: premio %.3f%% < minimo %.3f%%", profit_pct, MIN_PROFIT_PCT)
 
     elif mark_price <= lower:
         entry_price = lower
         tp = vwap
         reward = abs(tp - entry_price)
         profit_pct = (reward / entry_price) * 100
-        if profit_pct > 0.15:
+        if profit_pct > MIN_PROFIT_PCT:
             if mark_price >= lower * 0.998:
                 return "LONG", entry_price, tp
             else:
                 logger.debug("LONG bloqueado: precio muy lejos de banda (%.4f < lower*0.998)", mark_price)
         else:
-            logger.debug("LONG bloqueado: premio muy chico (%.3f%%)", profit_pct)
+            logger.debug("LONG bloqueado: premio %.3f%% < minimo %.3f%%", profit_pct, MIN_PROFIT_PCT)
 
     return None, None, None
 
