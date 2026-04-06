@@ -9,7 +9,6 @@ import time
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
-import requests
 import numpy as np
 import pandas as pd
 
@@ -35,44 +34,6 @@ class K:
     D  = "\033[2m"    # dim
     X  = "\033[0m"    # reset
 
-
-# ── Ventanas horarias ─────────────────────────────────────────────────────────
-def parse_window(w: str):
-    """
-    Parsea una ventana horaria.
-    Formatos: '13-16', '8-12', '24h', '0-24'
-    Retorna: (hora_inicio, hora_fin) o None si es 24h
-    """
-    w = w.strip()
-    if w in ('24h', '24', '0-24', 'all'):
-        return None  # Sin filtro
-    if '-' in w:
-        parts = w.split('-')
-        return (int(parts[0]), int(parts[1]))
-    raise ValueError(f"Formato de ventana invalido: {w}")
-
-def in_workday(open_time, workdays_only: bool) -> bool:
-    """Retorna True si la vela esta en un dia habil (lunes-viernes)."""
-    if not workdays_only:
-        return True
-    import pandas as pd
-    dow = pd.Timestamp(open_time).weekday()  # 0=lunes, 6=domingo
-    return dow < 5
-
-def in_window(open_time, window):
-    """Verifica si un timestamp esta dentro de la ventana horaria UTC."""
-    if window is None:
-        return True
-    h = open_time.hour if hasattr(open_time, 'hour') else None
-    if h is None:
-        # numpy datetime64
-        import pandas as pd
-        h = pd.Timestamp(open_time).hour
-    start, end = window
-    if start < end:
-        return start <= h < end
-    else:  # overnight wrap ej: 22-6
-        return h >= start or h < end
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 def fetch_candles(client, symbol, interval, days):
@@ -139,88 +100,6 @@ def fetch_candles(client, symbol, interval, days):
     return result
 
 
-# ── Filtro de noticias (backtest) ─────────────────────────────────────────────
-def load_news_windows(symbol: str, dias: int) -> list:
-    """
-    Descarga eventos USD de alto impacto de Forex Factory.
-    Cachea en backtest/data/news_events_ff.json por 12 horas.
-    Retorna lista de tuplas (datetime_inicio, datetime_fin) en UTC.
-    """
-    cache_path = "backtest/data/news_events_ff.json"
-    events = []
-
-    if os.path.exists(cache_path):
-        file_age = (time.time() - os.path.getmtime(cache_path)) / 3600
-        if file_age < 12:
-            with open(cache_path) as f:
-                raw = json.load(f)
-        if raw:  # solo usar cache si tiene datos
-            events = raw
-            print(f"  {K.G}📰 News cache cargado:{K.X} {len(events)} eventos ({cache_path})")
-        else:
-            print(f"  {K.Y}📰 News cache expirado. Descargando...{K.X}")
-
-    if not events:
-        FF_URLS = [
-            "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
-            "https://nfs.faireconomy.media/ff_calendar_nextweek.json",
-        ]
-        for url in FF_URLS:
-            try:
-                resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-                if resp.status_code == 429:
-                    print(f"  {K.Y}📰 FF rate limit (429). Esperá unos minutos y reintentá.{K.X}")
-                    continue
-                if resp.status_code == 404:
-                    continue  # nextweek normal si es antes del jueves
-                if resp.status_code != 200:
-                    print(f"  {K.Y}📰 FF {url} → HTTP {resp.status_code}{K.X}")
-                    continue
-                for item in resp.json():
-                    if item.get("impact", "").lower() != "high":
-                        continue
-                    if item.get("country", "").upper() != "USD":
-                        continue
-                    events.append({
-                        "date":     item.get("date", ""),
-                        "currency": item.get("currency", "USD").upper(),
-                        "event":    item.get("title", ""),
-                    })
-            except Exception as e:
-                print(f"  {K.R}📰 Error descargando {url}: {e}{K.X}")
-
-        os.makedirs("backtest/data", exist_ok=True)
-        with open(cache_path, "w") as f:
-            json.dump(events, f, indent=2)
-        print(f"  {K.G}📰 {len(events)} eventos guardados en {cache_path}{K.X}")
-
-    # Construir ventanas: [evento - 120min, evento + 15min]
-    windows = []
-    for ev in events:
-        try:
-            dt = datetime.fromisoformat(ev["date"]).astimezone(timezone.utc)
-            windows.append((
-                dt - timedelta(minutes=120),
-                dt + timedelta(minutes=15),
-            ))
-        except Exception:
-            continue
-
-    print(f"  {K.C}📰 {len(windows)} ventanas de bloqueo construidas.{K.X}")
-    return windows
-
-
-def in_news_window(candle_time, news_windows: list) -> bool:
-    """Retorna True si la vela cae dentro de alguna ventana de bloqueo."""
-    if not news_windows:
-        return False
-    ts = pd.Timestamp(candle_time)
-    if ts.tzinfo is None:
-        ts = ts.tz_localize("UTC")
-    dt = ts.to_pydatetime()
-    return any(start <= dt <= end for start, end in news_windows)
-
-
 def calculate_vwap_bands(df, mult):
     df['date'] = df['open_time'].dt.date
     df['typ'] = (df['high'] + df['low'] + df['close']) / 3
@@ -242,7 +121,7 @@ def calculate_vwap_bands(df, mult):
     return df
 
 
-def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, max_duration=60, risk_pct=1, window=None, workdays_only=False, news_windows=None):
+def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, max_duration=60, risk_pct=1):
     trades = []
     capital = INITIAL_CAPITAL
     df = calculate_vwap_bands(df.copy(), band_mult)
@@ -252,11 +131,13 @@ def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, ma
     highs = df["high"].values
     lows = df["low"].values
     closes = df["close"].values
+    vols = df["volume"].values
     
     vwaps = df["vwap"].values
     uppers = df["upper_band"].values
     lowers = df["lower_band"].values
     bar_nums = df["bar_num"].values
+
     last_trade_bar = -999
 
     for i in range(10, len(df)):
@@ -265,41 +146,22 @@ def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, ma
             
         if bar_nums[i] < 120:
             continue
-
-        # Filtro de ventana horaria
-        if window is not None and not in_window(times[i], window):
-            continue
-
-        # Filtro de dias de semana
-        if not in_workday(times[i], workdays_only):
-            continue
-
-        # Filtro de noticias económicas (solo si --no-news activo)
-        if news_windows and in_news_window(times[i], news_windows):
-            continue
             
-        # Precios de la vela actual (lo que realmente hace el mercado)
         c, l, h = closes[i], lows[i], highs[i]
-        
-        # 1. CAMBIO CLAVE: Usamos las bandas de la vela ANTERIOR para simular una orden LIMIT
-        vwap_target = vwaps[i-1]
-        lower_limit = lowers[i-1]
-        upper_limit = uppers[i-1]
+        vwap, lower, upper = vwaps[i], lowers[i], uppers[i]
         
         direction = None
         entry = 0.0
         
-        # Lógica LONG Realista (El mínimo de esta vela "pesca" la orden Limit puesta antes)
-        if l <= lower_limit:  
+        if l <= lower and c > lower * 0.998:  
             direction = "LONG"
-            entry = lower_limit
-            tp = vwap_target
+            entry = lower
+            tp = vwap
             
-        # Lógica SHORT Realista (El máximo de esta vela "pesca" la orden Limit puesta antes)
-        elif h >= upper_limit:
+        elif h >= upper and c < upper * 1.002:
             direction = "SHORT"
-            entry = upper_limit
-            tp = vwap_target
+            entry = upper
+            tp = vwap
 
         if not direction:
             continue
@@ -316,44 +178,22 @@ def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, ma
             sl = entry + sl_dist
 
         result, exit_p = None, None
-        trade_end_bar = i
-        
-        # 2. EVALUACIÓN INTRA-VELA (La Regla Pesimista)
-        # ¿Qué pasa si la mecha toca el SL y el TP en este mismo minuto?
-        if direction == "LONG":
-            hit_sl = l <= sl
-            hit_tp = h >= tp
-            if hit_sl and hit_tp: result, exit_p = "LOSS", sl  # Ante la duda, asume pérdida
-            elif hit_sl: result, exit_p = "LOSS", sl
-            elif hit_tp: result, exit_p = "WIN", tp
-        else:
-            hit_sl = h >= sl
-            hit_tp = l <= tp
-            if hit_sl and hit_tp: result, exit_p = "LOSS", sl  # Ante la duda, asume pérdida
-            elif hit_sl: result, exit_p = "LOSS", sl
-            elif hit_tp: result, exit_p = "WIN", tp
-
-        # 3. EVALUACIÓN EN VELAS FUTURAS (Si el trade sobrevivió al primer minuto)
-        if not result:
-            for j in range(i+1, min(i + max_duration, len(df))):
-                trade_end_bar = j
-                if direction == "LONG":
-                    hit_sl = lows[j] <= sl
-                    hit_tp = highs[j] >= tp
-                    # Doble colisión en velas futuras también asume pérdida
-                    if hit_sl and hit_tp: result, exit_p = "LOSS", sl; break
-                    elif hit_sl: result, exit_p = "LOSS", sl; break
-                    elif hit_tp: result, exit_p = "WIN", tp; break
-                else:
-                    hit_sl = highs[j] >= sl
-                    hit_tp = lows[j] <= tp
-                    if hit_sl and hit_tp: result, exit_p = "LOSS", sl; break
-                    elif hit_sl: result, exit_p = "LOSS", sl; break
-                    elif hit_tp: result, exit_p = "WIN", tp; break
+        for j in range(i+1, min(i + max_duration, len(df))):
+            if direction == "LONG":
+                if lows[j] <= sl:
+                    result, exit_p = "LOSS", sl; break
+                if highs[j] >= tp:
+                    result, exit_p = "WIN", tp; break
+            else:
+                if highs[j] >= sl:
+                    result, exit_p = "LOSS", sl; break
+                if lows[j] <= tp:
+                    result, exit_p = "WIN", tp; break
 
         if not result:
             continue
 
+        # Posicionamiento dinámico usando la variable de riesgo inyectada
         riesgo = capital * risk_pct
         qty = riesgo / sl_dist if sl_dist > 0 else 0
         
@@ -365,10 +205,10 @@ def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, ma
         total_fees = fee_entrada + fee_salida
         pnl_neto = pnl_bruto - total_fees
         capital += pnl_neto
-        last_trade_bar = trade_end_bar
+        last_trade_bar = j
 
         trades.append({
-            "time": str(times[i]), "close_time": str(times[trade_end_bar]),
+            "time": str(times[i]), "close_time": str(times[j]),
             "symbol": symbol, "direction": direction,
             "entry": round(entry,4), "sl": round(sl,4), "tp": round(tp,4),
             "exit": round(exit_p,4), "result": result,
@@ -376,7 +216,7 @@ def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, ma
             "pnl": round(pnl_neto,4), "capital": round(capital,2),
             "score": 100, "vol_ratio": 1.0, "rsi": 50.0, "bias": "MEAN_REV",
             "ob_zone": f"Band_{band_mult}s", 
-            "duration_min": float(trade_end_bar - i),
+            "duration_min": float(j - i),
         })
 
     return trades, capital
@@ -465,95 +305,57 @@ def print_monthly(trades):
 
 def main():
     p = argparse.ArgumentParser(description="Backtest VWAP Reversion")
-    p.add_argument("--symbol",     default="BTCUSDT")
-    p.add_argument("--dias",       type=int, default=90)
-    p.add_argument("--rr",         type=str, default='0.5')
-    p.add_argument("--band-mult",  type=str, default='2.5')
-    p.add_argument("--min-profit", type=float, default=0.20)
-    p.add_argument("--risk",       type=str, default='1')
-    p.add_argument("--sweep-rr",   action="store_true")
-    p.add_argument("--scan",       action="store_true")
-    p.add_argument("--windows",    type=str, default="24h")
-    p.add_argument("--days",       type=str, default="allweek",
-                   help="Dias a operar: allweek (default) | workdays (lun-vie) | allweek;workdays para comparar")
-    p.add_argument("--no-news",    action="store_true",
-                   help="Simular filtro de noticias: excluir velas en ventana de eventos high-impact (FCS API)")
+    p.add_argument("--symbol", default="BTCUSDT", help="Select SYMBOL to scan, default = BTCUSDT")
+    p.add_argument("--dias", type=int, default=90, help="Dias a escanear. default = 90")
+    p.add_argument("--rr", type=str, default='0.5', help="Risk/Ratio %%, default = 0.5")
+    p.add_argument("--band-mult", type=float, default=2.5, help="default 2.5")
+    p.add_argument("--min-profit", type=float, default=0.20, help="Porcentaje minimo de profit para ignorar fees")
+    p.add_argument("--risk", type=float, default=1, help="Riesgo por trade en porcentaje (ej: 1.0 para 1%%) default = 1")
+    p.add_argument("--sweep-rr", action="store_true", help="Prueba diferentes RR (0.2, 0.3, 0.4, 0.5, 0.7)")
+    p.add_argument("--scan", action="store_true",help="Escanea BTCUSDT - ETHUSDT")
     args = p.parse_args()
 
     client = Client(os.getenv("BINANCE_API_KEY",""), os.getenv("BINANCE_API_SECRET",""))
     symbols = ["BTCUSDT", "ETHUSDT"] if args.scan else [args.symbol]
-
+    
+    # RRs ajustados para enfocarnos en los rentables (< 1.0)
+    #rrs = [0.2, 0.3, 0.4, 0.5, 0.7] if args.sweep_rr else [args.rr]
     if args.sweep_rr:
-        rrs = [0.2, 0.3, 0.4, 0.5, 0.7]
+        rrs = [0.2, 0.3, 0.4, 0.5, 0.7] 
     else:
         rrs = [float(x) for x in args.rr.split(',')]
-
-    windows_raw = [w.strip() for w in args.windows.split(';')]
-    windows = [(w, parse_window(w)) for w in windows_raw]
-
-    days_raw = [d.strip() for d in args.days.split(';')]
-    days_list = [(d, d == 'workdays') for d in days_raw]
-
-    band_mults = [float(x) for x in args.band_mult.split(',')]
-    risks      = [float(x) for x in args.risk.split(',')]
-
-    # ── Cargar ventanas de noticias una sola vez (si --no-news activo) ────────
-    # Se cachea por símbolo; si hay sweep multi-symbol, se carga una vez por cada uno
-    news_windows_cache = {}
-    if args.no_news:
-        print(f"\n{K.Y}📰 Modo --no-news activo. Cargando eventos de alto impacto...{K.X}")
-        for sym in symbols:
-            news_windows_cache[sym] = load_news_windows(sym, args.dias)
-    # ─────────────────────────────────────────────────────────────────────────
-
-    total_combos = len(symbols) * len(band_mults) * len(rrs) * len(risks) * len(windows) * len(days_list)
-    if total_combos > 1:
-        print(f"\n{K.C}{'═'*62}{K.X}")
-        print(f"  {K.B}SWEEP: {total_combos} combinaciones{K.X}  "
-              f"symbols={symbols}  band={band_mults}  rr={rrs}  risk={risks}  windows={windows_raw}  days={days_raw}")
-        print(f"{K.C}{'═'*62}{K.X}\n")
-
+    
     all_summaries = []
     ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     os.makedirs("backtest/results", exist_ok=True)
 
     for symbol in symbols:
         df_1m = fetch_candles(client, symbol, "1m", args.dias)
-        nw = news_windows_cache.get(symbol, None)
-        for band_val in band_mults:
-            for rr_val in rrs:
-                for risk_val in risks:
-                    for win_label, win_parsed in windows:
-                      for day_label, workdays_only in days_list:
-                        news_tag = "_NEWS" if args.no_news else ""
-                        label = f"VWAP_B{band_val}_RR{rr_val}_RSK{risk_val}_W{win_label}_D{day_label}{news_tag}"
-                        risk_decimal = risk_val / 100.0
+        for rr_val in rrs:
+            label = f"VWAP_B{args.band_mult}_RR{rr_val}_RSK{args.risk}"
+            risk_decimal = args.risk / 100.0
+            
+            trades, final = run_vwap_backtest(
+                df_1m, symbol, 
+                rr=rr_val, band_mult=args.band_mult, 
+                min_profit_pct=args.min_profit,
+                risk_pct=risk_decimal
+            )
+            
+            s = summary_dict(trades, INITIAL_CAPITAL, final, symbol, args.dias, label, args.band_mult, rr_val, args.risk)
+            s["trades"] = trades
+            print_summary(s)
+            print_monthly(trades)
+            all_summaries.append(s)
 
-                        trades, final = run_vwap_backtest(
-                            df_1m, symbol,
-                            rr=rr_val, band_mult=band_val,
-                            min_profit_pct=args.min_profit,
-                            risk_pct=risk_decimal,
-                            window=win_parsed,
-                            workdays_only=workdays_only,
-                            news_windows=nw,
-                        )
-
-                        s = summary_dict(trades, INITIAL_CAPITAL, final, symbol, args.dias, label, band_val, rr_val, risk_val)
-                        s["trades"] = trades
-                        print_summary(s)
-                        print_monthly(trades)
-                        all_summaries.append(s)
-
-    # Nombre descriptivo: single → detallado, multi → SWEEP
-    news_suffix = "_NEWS" if args.no_news else ""
+    data_out = {"summaries": []}
+    # Generar un nombre de archivo descriptivo
     if len(all_summaries) == 1:
         s = all_summaries[0]
-        win_str = windows_raw[0].replace('-','_')
-        day_str = days_raw[0]
-        filename = f"backtest_{s['symbol']}_B{s['band_mult']}_RR{s['rr']}_RSK{s['risk_pct']}_W{win_str}_D{day_str}{news_suffix}_{ts_str}.json"
+        # Creamos el nombre: backtest_ETHUSDT_B2.5_RR0.4_RSK4.0.json
+        filename = f"backtest_{s['symbol']}_B{args.band_mult}_RR{s['rr']}_RSK{args.risk}_{ts_str}.json"
     else:
-        filename = f"backtest_SWEEP_{args.symbol}{news_suffix}_{ts_str}.json"
+        filename = f"backtest_SCAN_{ts_str}.json"
     if len(all_summaries) > 1:
         ranked = sorted(all_summaries, key=lambda x: x["profit_factor"], reverse=True)
         print(f"\n{K.C}{'═'*62}{K.X}")
@@ -563,13 +365,11 @@ def main():
             pf_c = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
             pnl_c = K.G if s['pnl_total'] >= 0 else K.R
             medal = " 🥇" if idx == 1 else " 🥈" if idx == 2 else " 🥉" if idx == 3 else f" {idx}."
-            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}R/R: {s['rr']}{K.X}] "
-                  f"Band={s['band_mult']}{K.X} "
+            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}Risk/Reward: {s['rr']}{K.X}] "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL ={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
-                  f"DD={s['max_drawdown']}%{K.X} "
-                  f"Risk={s['risk_pct']}")
+                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
+                  f"DD={s['max_drawdown']}%")
         print(f"{K.C}{'═'*62}{K.X}")    
         ranked = sorted(all_summaries, key=lambda x: x["pnl_total"], reverse=True)
         print(f"\n{K.C}{'═'*62}{K.X}")
@@ -579,13 +379,11 @@ def main():
             pf_c = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
             pnl_c = K.G if s['pnl_total'] >= 0 else K.R
             medal = " 🥇" if idx == 1 else " 🥈" if idx == 2 else " 🥉" if idx == 3 else f" {idx}."
-            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}R/R: {s['rr']}{K.X}] "
-                  f"Band={s['band_mult']}{K.X} "
+            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}Risk/Reward: {s['rr']}{K.X}] "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
-                  f"DD={s['max_drawdown']}%{K.X} "
-                  f"Risk={s['risk_pct']}")
+                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
+                  f"DD={s['max_drawdown']}%")
         print(f"{K.C}{'═'*62}{K.X}")
 
     out = os.path.join("backtest/results", filename)

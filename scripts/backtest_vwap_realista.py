@@ -443,7 +443,16 @@ def run_vwap_backtest(df_1m, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20,
                         elif hit_tp: result, exit_p = "WIN", tp; break
 
         if not result:
-            continue
+            # Expiró sin tocar SL ni TP — cerrar al último precio disponible
+            if use_1m_resolution:
+                last_idx = min(idx_start + max_dur_1m, len(df_exec) - 1)
+                exit_p = float(exec_closes[last_idx])
+                trade_end_time = exec_times[last_idx]
+            else:
+                last_idx = min(i + max_duration, len(df_signal) - 1)
+                exit_p = float(sig_closes[last_idx])
+                trade_end_time = sig_times[last_idx]
+            result = "TIMEOUT"
 
         riesgo = capital * risk_pct
         qty = riesgo / sl_dist if sl_dist > 0 else 0
@@ -477,45 +486,48 @@ def run_vwap_backtest(df_1m, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20,
 
 # ── Reporte ───────────────────────────────────────────────────────────────────
 def summary_dict(trades, initial, final, symbol, dias, label, band_mult, rr, risk, tf="1m"):
-    total = len(trades)
-    wins = sum(1 for t in trades if t["result"]=="WIN")
-    losses = total - wins
-    gp = sum(t["pnl"] for t in trades if t["pnl"]>0)
-    gl = abs(sum(t["pnl"] for t in trades if t["pnl"]<0))
+    total    = len(trades)
+    wins     = sum(1 for t in trades if t["result"] == "WIN")
+    losses   = sum(1 for t in trades if t["result"] == "LOSS")
+    timeouts = sum(1 for t in trades if t["result"] == "TIMEOUT")
+    gp = sum(t["pnl"] for t in trades if t["pnl"] > 0)
+    gl = abs(sum(t["pnl"] for t in trades if t["pnl"] < 0))
     pnl_bruto = sum(t.get("pnl_bruto", 0) for t in trades)
     fees = sum(t.get("fees", 0) for t in trades)
-    
+
     peak = initial
     mdd = 0
     for t in trades:
-        if t["capital"]>peak: peak=t["capital"]
-        dd = (peak-t["capital"])/peak
-        if dd>mdd: mdd=dd
-        
+        if t["capital"] > peak: peak = t["capital"]
+        dd = (peak - t["capital"]) / peak
+        if dd > mdd: mdd = dd
+
     return {
-        "label": label, 
-        "symbol": symbol, 
-        "ltf": "1m", 
+        "label": label,
+        "symbol": symbol,
+        "ltf": "1m",
         "htf": "VWAP",
-        "timeframe": tf, 
-        "dias": dias, 
+        "timeframe": tf,
+        "dias": dias,
         "band_mult": band_mult,
         "rr": rr,
         "risk_pct": risk,
         "total": total, "wins": wins,
-        "losses": losses, "winrate": round(wins/total*100,1) if total else 0,
-        "profit_factor": round(gp/gl,2) if gl>0 else 0,
+        "losses": losses, "timeouts": timeouts,
+        "winrate": round(wins / total * 100, 1) if total else 0,
+        "profit_factor": round(gp / gl, 2) if gl > 0 else 0,
         "pnl_bruto": round(pnl_bruto, 2), "fees_totales": round(fees, 2),
-        "pnl_total": round(sum(t["pnl"] for t in trades),4),
-        "capital_final": round(final,2), "retorno_pct": round((final-initial)/initial*100,2),
-        "max_drawdown": round(mdd*100,2), "trades_per_day": round(total/max(dias,1),1),
+        "pnl_total": round(sum(t["pnl"] for t in trades), 4),
+        "capital_final": round(final, 2), "retorno_pct": round((final - initial) / initial * 100, 2),
+        "max_drawdown": round(mdd * 100, 2), "trades_per_day": round(total / max(dias, 1), 1),
     }
 def print_summary(s):
     ret_c = K.G if s['retorno_pct'] >= 0 else K.R
-    pf_c = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
-    wr_c = K.G if s['winrate'] >= 50 else K.Y if s['winrate'] >= 40 else K.R
+    pf_c  = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
+    wr_c  = K.G if s['winrate'] >= 50 else K.Y if s['winrate'] >= 40 else K.R
     print(f"\n{K.C}{'='*62}{K.X}\n  {K.B}📊 BACKTEST VWAP — {s['symbol']} | {s['timeframe']} | {s['dias']} días [Band: {s['band_mult']} RR: {s['rr']} Risk: {s['risk_pct']}%{K.X}]\n{K.C}{'='*62}{K.X}")
-    print(f"💹 Trades:        {K.B}{s['total']}{K.X} ({K.G}{s['wins']}W{K.X} / {K.R}{s['losses']}L{K.X})")
+    timeouts = s.get('timeouts', 0)
+    print(f"💹 Trades:        {K.B}{s['total']}{K.X} ({K.G}{s['wins']}W{K.X} / {K.R}{s['losses']}L{K.X} / {K.Y}{timeouts}T{K.X})")
     print(f"📈 Win rate:      {wr_c}{s['winrate']}%{K.X}")
     print(f"⚖️ Profit factor: {pf_c}{s['profit_factor']}{K.X}")
     print(f"💰 PnL NETO:      {ret_c}{s['pnl_total']:+.2f} USDT{K.X} (Fees: {s['fees_totales']:.2f})")
@@ -523,7 +535,6 @@ def print_summary(s):
     print(f"📉 Max Drawdown:  {K.Y}{s['max_drawdown']}%{K.X}")
     print(f"🤑 Trades/día:    {K.C}{s['trades_per_day']}{K.X}")
     print(f"{K.C}{'='*62}{K.X}")
-    
 def print_monthly(trades):
     if not trades:
         print(f"  {K.D}Sin trades.{K.X}"); return
@@ -571,8 +582,11 @@ def main():
                    help="Dias a operar: allweek (default) | workdays (lun-vie) | allweek;workdays para comparar")
     p.add_argument("--no-news",    action="store_true",
                    help="Simular filtro de noticias: excluir velas en ventana de eventos high-impact (FCS API)")
-    p.add_argument("--tf",         type=str, default="1m",
+    p.add_argument("--tf",           type=str, default="1m",
                    help="Timeframe(s) para señales VWAP. Ej: 1m | 5m | 15m,1h | 1m;5m;15m;1h (semicolon=sweep)")
+    p.add_argument("--max-duration", type=int, default=60,
+                   help="Duración máxima de un trade en barras del TF señal (default: 60). "
+                        "Ej: 60=1h, 1440=1día, 2880=2días. Al expirar se cierra al precio actual.")
     args = p.parse_args()
 
     client = Client(os.getenv("BINANCE_API_KEY",""), os.getenv("BINANCE_API_SECRET",""))
@@ -639,6 +653,7 @@ def main():
                                 workdays_only=workdays_only,
                                 news_windows=nw,
                                 tf=tf_val,
+                                max_duration=args.max_duration,
                             )
 
                             s = summary_dict(trades, INITIAL_CAPITAL, final, symbol, args.dias, label, band_val, rr_val, risk_val, tf=tf_val)

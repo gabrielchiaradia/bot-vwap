@@ -67,7 +67,7 @@ def actualizar_bandas(df_velas: pd.DataFrame) -> dict | None:
 
         fecha_hoy = df_bands['open_time'].dt.date.iloc[-1]
         velas_hoy = (df_bands['open_time'].dt.date == fecha_hoy).sum()
-        logger.info("Velas de hoy (%s): %d | bar_num ├║ltimo: %d",
+        logger.info("Velas de hoy (%s): %d | bar_num  último: %d",
                     fecha_hoy, velas_hoy, int(last['bar_num']))
 
         if last['bar_num'] < 120:
@@ -167,7 +167,7 @@ def actualizar_bandas_cross(df_velas: pd.DataFrame) -> dict | None:
 
         fecha_hoy = df_bands['open_time'].dt.date.iloc[-1]
         velas_hoy = (df_bands['open_time'].dt.date == fecha_hoy).sum()
-        logger.info("Velas de hoy (%s): %d | bar_num ├║ltimo: %d",
+        logger.info("Velas de hoy (%s): %d | bar_num  último: %d",
                     fecha_hoy, velas_hoy, int(last['bar_num']))
 
         # Filtro de inicio de sesi├│n ÔÇö primeras 5 velas del TF

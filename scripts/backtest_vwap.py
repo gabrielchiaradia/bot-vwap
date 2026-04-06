@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
+import requests
 import numpy as np
 import pandas as pd
 
@@ -34,6 +35,44 @@ class K:
     D  = "\033[2m"    # dim
     X  = "\033[0m"    # reset
 
+
+# ── Ventanas horarias ─────────────────────────────────────────────────────────
+def parse_window(w: str):
+    """
+    Parsea una ventana horaria.
+    Formatos: '13-16', '8-12', '24h', '0-24'
+    Retorna: (hora_inicio, hora_fin) o None si es 24h
+    """
+    w = w.strip()
+    if w in ('24h', '24', '0-24', 'all'):
+        return None  # Sin filtro
+    if '-' in w:
+        parts = w.split('-')
+        return (int(parts[0]), int(parts[1]))
+    raise ValueError(f"Formato de ventana invalido: {w}")
+
+def in_workday(open_time, workdays_only: bool) -> bool:
+    """Retorna True si la vela esta en un dia habil (lunes-viernes)."""
+    if not workdays_only:
+        return True
+    import pandas as pd
+    dow = pd.Timestamp(open_time).weekday()  # 0=lunes, 6=domingo
+    return dow < 5
+
+def in_window(open_time, window):
+    """Verifica si un timestamp esta dentro de la ventana horaria UTC."""
+    if window is None:
+        return True
+    h = open_time.hour if hasattr(open_time, 'hour') else None
+    if h is None:
+        # numpy datetime64
+        import pandas as pd
+        h = pd.Timestamp(open_time).hour
+    start, end = window
+    if start < end:
+        return start <= h < end
+    else:  # overnight wrap ej: 22-6
+        return h >= start or h < end
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 def fetch_candles(client, symbol, interval, days):
@@ -100,6 +139,120 @@ def fetch_candles(client, symbol, interval, days):
     return result
 
 
+# ── Filtro de noticias (backtest) ─────────────────────────────────────────────
+def load_news_windows(symbol: str, dias: int) -> list:
+    """
+    Descarga eventos USD de alto impacto de Forex Factory.
+    Cachea en backtest/data/news_events_ff.json por 12 horas.
+    Retorna lista de tuplas (datetime_inicio, datetime_fin) en UTC.
+    """
+    cache_path = "backtest/data/news_events_ff.json"
+    events = []
+
+    if os.path.exists(cache_path):
+        file_age = (time.time() - os.path.getmtime(cache_path)) / 3600
+        if file_age < 12:
+            with open(cache_path) as f:
+                raw = json.load(f)
+        if raw:  # solo usar cache si tiene datos
+            events = raw
+            print(f"  {K.G}📰 News cache cargado:{K.X} {len(events)} eventos ({cache_path})")
+        else:
+            print(f"  {K.Y}📰 News cache expirado. Descargando...{K.X}")
+
+    if not events:
+        FF_URLS = [
+            "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+            "https://nfs.faireconomy.media/ff_calendar_nextweek.json",
+        ]
+        for url in FF_URLS:
+            try:
+                resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+                if resp.status_code == 429:
+                    print(f"  {K.Y}📰 FF rate limit (429). Esperá unos minutos y reintentá.{K.X}")
+                    continue
+                if resp.status_code == 404:
+                    continue  # nextweek normal si es antes del jueves
+                if resp.status_code != 200:
+                    print(f"  {K.Y}📰 FF {url} → HTTP {resp.status_code}{K.X}")
+                    continue
+                for item in resp.json():
+                    if item.get("impact", "").lower() != "high":
+                        continue
+                    if item.get("country", "").upper() != "USD":
+                        continue
+                    events.append({
+                        "date":     item.get("date", ""),
+                        "currency": item.get("currency", "USD").upper(),
+                        "event":    item.get("title", ""),
+                    })
+            except Exception as e:
+                print(f"  {K.R}📰 Error descargando {url}: {e}{K.X}")
+
+        os.makedirs("backtest/data", exist_ok=True)
+        with open(cache_path, "w") as f:
+            json.dump(events, f, indent=2)
+        print(f"  {K.G}📰 {len(events)} eventos guardados en {cache_path}{K.X}")
+
+    # Construir ventanas: [evento - 120min, evento + 15min]
+    windows = []
+    for ev in events:
+        try:
+            dt = datetime.fromisoformat(ev["date"]).astimezone(timezone.utc)
+            windows.append((
+                dt - timedelta(minutes=120),
+                dt + timedelta(minutes=15),
+            ))
+        except Exception:
+            continue
+
+    print(f"  {K.C}📰 {len(windows)} ventanas de bloqueo construidas.{K.X}")
+    return windows
+
+
+def in_news_window(candle_time, news_windows: list) -> bool:
+    """Retorna True si la vela cae dentro de alguna ventana de bloqueo."""
+    if not news_windows:
+        return False
+    ts = pd.Timestamp(candle_time)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("UTC")
+    dt = ts.to_pydatetime()
+    return any(start <= dt <= end for start, end in news_windows)
+
+
+def resample_candles(df_1m, tf: str) -> pd.DataFrame:
+    """
+    Resamplea velas de 1m a un timeframe superior.
+    Si tf == '1m', retorna el df tal cual.
+    Soporta: 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h.
+    """
+    if tf == "1m":
+        return df_1m.copy()
+
+    # Mapeo de nombre a offset de pandas
+    tf_map = {
+        "3m": "3min", "5m": "5min", "15m": "15min", "30m": "30min",
+        "1h": "1h", "2h": "2h", "4h": "4h",
+    }
+    offset = tf_map.get(tf)
+    if offset is None:
+        raise ValueError(f"Timeframe no soportado: {tf}. Usa: 1m,3m,5m,15m,30m,1h,2h,4h")
+
+    df = df_1m.copy()
+    df = df.set_index("open_time")
+
+    resampled = df.resample(offset, label="left", closed="left").agg({
+        "open":   "first",
+        "high":   "max",
+        "low":    "min",
+        "close":  "last",
+        "volume": "sum",
+    }).dropna(subset=["open"]).reset_index()
+
+    return resampled
+
+
 def calculate_vwap_bands(df, mult):
     df['date'] = df['open_time'].dt.date
     df['typ'] = (df['high'] + df['low'] + df['close']) / 3
@@ -121,56 +274,95 @@ def calculate_vwap_bands(df, mult):
     return df
 
 
-def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, max_duration=60, risk_pct=1):
+def run_vwap_backtest(df_1m, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, max_duration=60, risk_pct=1, window=None, workdays_only=False, news_windows=None, tf="1m"):
     trades = []
     capital = INITIAL_CAPITAL
-    df = calculate_vwap_bands(df.copy(), band_mult)
-    
-    times = df["open_time"].values
-    opens = df["open"].values
-    highs = df["high"].values
-    lows = df["low"].values
-    closes = df["close"].values
-    vols = df["volume"].values
-    
-    vwaps = df["vwap"].values
-    uppers = df["upper_band"].values
-    lowers = df["lower_band"].values
-    bar_nums = df["bar_num"].values
 
-    last_trade_bar = -999
+    # ── Resamplear para señales ──────────────────────────────────────────────
+    df_signal = resample_candles(df_1m, tf)
+    df_signal = calculate_vwap_bands(df_signal, band_mult)
 
-    for i in range(10, len(df)):
-        if i - last_trade_bar < 10:  
+    # Si tf > 1m, usamos las velas de 1m para resolver trades con precisión
+    use_1m_resolution = (tf != "1m")
+    if use_1m_resolution:
+        df_exec = df_1m.copy()
+        exec_times  = df_exec["open_time"].values
+        exec_opens  = df_exec["open"].values
+        exec_highs  = df_exec["high"].values
+        exec_lows   = df_exec["low"].values
+        exec_closes = df_exec["close"].values
+
+    # Señales del TF
+    sig_times    = df_signal["open_time"].values
+    sig_opens    = df_signal["open"].values
+    sig_highs    = df_signal["high"].values
+    sig_lows     = df_signal["low"].values
+    sig_closes   = df_signal["close"].values
+    sig_vwaps    = df_signal["vwap"].values
+    sig_uppers   = df_signal["upper_band"].values
+    sig_lowers   = df_signal["lower_band"].values
+    sig_bar_nums = df_signal["bar_num"].values
+
+    last_trade_time = pd.Timestamp("2000-01-01", tz="UTC")
+
+    # Mapeo de tf a minutos para cooldown y max_duration
+    tf_minutes = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240}
+    tf_min = tf_minutes.get(tf, 1)
+    cooldown_bars = 10  # en unidades del TF de señal
+    # max_duration se escala: en TF señal son N barras, en 1m son N * tf_min velas
+    max_dur_1m = max_duration * tf_min if use_1m_resolution else max_duration
+
+    for i in range(10, len(df_signal)):
+        # Cooldown: al menos 10 barras del TF señal desde el último trade
+        sig_time_i = pd.Timestamp(sig_times[i])
+        if sig_time_i.tzinfo is None:
+            sig_time_i = sig_time_i.tz_localize("UTC")
+        minutes_since_last = (sig_time_i - last_trade_time).total_seconds() / 60
+        if minutes_since_last < cooldown_bars * tf_min:
             continue
-            
-        if bar_nums[i] < 120:
+
+        if sig_bar_nums[i] < 120 // tf_min:
             continue
-            
-        c, l, h = closes[i], lows[i], highs[i]
-        vwap, lower, upper = vwaps[i], lowers[i], uppers[i]
-        
+
+        # Filtro de ventana horaria
+        if window is not None and not in_window(sig_times[i], window):
+            continue
+
+        # Filtro de dias de semana
+        if not in_workday(sig_times[i], workdays_only):
+            continue
+
+        # Filtro de noticias
+        if news_windows and in_news_window(sig_times[i], news_windows):
+            continue
+
+        c, l, h = sig_closes[i], sig_lows[i], sig_highs[i]
+
+        # Bandas de la vela ANTERIOR del TF señal
+        vwap_target  = sig_vwaps[i-1]
+        lower_limit  = sig_lowers[i-1]
+        upper_limit  = sig_uppers[i-1]
+
         direction = None
         entry = 0.0
-        
-        if l <= lower and c > lower * 0.998:  
+
+        if l <= lower_limit:
             direction = "LONG"
-            entry = lower
-            tp = vwap
-            
-        elif h >= upper and c < upper * 1.002:
+            entry = lower_limit
+            tp = vwap_target
+        elif h >= upper_limit:
             direction = "SHORT"
-            entry = upper
-            tp = vwap
+            entry = upper_limit
+            tp = vwap_target
 
         if not direction:
             continue
-            
+
         reward = abs(tp - entry)
         profit_pct = (reward / entry) * 100
         if profit_pct < min_profit_pct:
             continue
-            
+
         sl_dist = reward / rr
         if direction == "LONG":
             sl = entry - sl_dist
@@ -178,91 +370,350 @@ def run_vwap_backtest(df, symbol, rr=1.0, band_mult=2.5, min_profit_pct=0.20, ma
             sl = entry + sl_dist
 
         result, exit_p = None, None
-        for j in range(i+1, min(i + max_duration, len(df))):
+        trade_end_time = sig_times[i]
+
+        if use_1m_resolution:
+            # ── Resolver trade en velas de 1m ────────────────────────────────
+            # Encontrar el índice de 1m correspondiente al inicio de esta vela señal
+            sig_open_time = sig_times[i]
+            # Buscar la primera vela de 1m >= sig_open_time
+            idx_start = np.searchsorted(exec_times, sig_open_time, side="left")
+
+            # Evaluar intra-vela: primero la propia vela de entrada (1m)
+            for j in range(idx_start, min(idx_start + max_dur_1m, len(df_exec))):
+                h1 = exec_highs[j]
+                l1 = exec_lows[j]
+
+                if direction == "LONG":
+                    # Primero verificar que la orden limit se llena
+                    if j == idx_start and l1 > entry:
+                        break  # En 1m nunca llegó al entry
+                    hit_sl = l1 <= sl
+                    hit_tp = h1 >= tp
+                    if hit_sl and hit_tp:
+                        result, exit_p = "LOSS", sl
+                    elif hit_sl:
+                        result, exit_p = "LOSS", sl
+                    elif hit_tp:
+                        result, exit_p = "WIN", tp
+                else:
+                    if j == idx_start and h1 < entry:
+                        break
+                    hit_sl = h1 >= sl
+                    hit_tp = l1 <= tp
+                    if hit_sl and hit_tp:
+                        result, exit_p = "LOSS", sl
+                    elif hit_sl:
+                        result, exit_p = "LOSS", sl
+                    elif hit_tp:
+                        result, exit_p = "WIN", tp
+
+                if result:
+                    trade_end_time = exec_times[j]
+                    break
+        else:
+            # ── TF 1m: lógica original ───────────────────────────────────────
             if direction == "LONG":
-                if lows[j] <= sl:
-                    result, exit_p = "LOSS", sl; break
-                if highs[j] >= tp:
-                    result, exit_p = "WIN", tp; break
+                hit_sl = l <= sl
+                hit_tp = h >= tp
+                if hit_sl and hit_tp: result, exit_p = "LOSS", sl
+                elif hit_sl: result, exit_p = "LOSS", sl
+                elif hit_tp: result, exit_p = "WIN", tp
             else:
-                if highs[j] >= sl:
-                    result, exit_p = "LOSS", sl; break
-                if lows[j] <= tp:
-                    result, exit_p = "WIN", tp; break
+                hit_sl = h >= sl
+                hit_tp = l <= tp
+                if hit_sl and hit_tp: result, exit_p = "LOSS", sl
+                elif hit_sl: result, exit_p = "LOSS", sl
+                elif hit_tp: result, exit_p = "WIN", tp
+
+            if not result:
+                for j in range(i+1, min(i + max_duration, len(df_signal))):
+                    trade_end_time = sig_times[j]
+                    if direction == "LONG":
+                        hit_sl = sig_lows[j] <= sl
+                        hit_tp = sig_highs[j] >= tp
+                        if hit_sl and hit_tp: result, exit_p = "LOSS", sl; break
+                        elif hit_sl: result, exit_p = "LOSS", sl; break
+                        elif hit_tp: result, exit_p = "WIN", tp; break
+                    else:
+                        hit_sl = sig_highs[j] >= sl
+                        hit_tp = sig_lows[j] <= tp
+                        if hit_sl and hit_tp: result, exit_p = "LOSS", sl; break
+                        elif hit_sl: result, exit_p = "LOSS", sl; break
+                        elif hit_tp: result, exit_p = "WIN", tp; break
 
         if not result:
-            continue
+            # Expiró sin tocar SL ni TP — cerrar al último precio disponible
+            if use_1m_resolution:
+                last_idx = min(idx_start + max_dur_1m, len(df_exec) - 1)
+                exit_p = float(exec_closes[last_idx])
+                trade_end_time = exec_times[last_idx]
+            else:
+                last_idx = min(i + max_duration, len(df_signal) - 1)
+                exit_p = float(sig_closes[last_idx])
+                trade_end_time = sig_times[last_idx]
+            result = "TIMEOUT"
 
-        # Posicionamiento dinámico usando la variable de riesgo inyectada
         riesgo = capital * risk_pct
         qty = riesgo / sl_dist if sl_dist > 0 else 0
-        
+
         pnl_bruto = (exit_p - entry)*qty if direction=="LONG" else (entry - exit_p)*qty
-        
-        fee_entrada = (entry * qty) * MAKER_FEE  
+
+        fee_entrada = (entry * qty) * MAKER_FEE
         fee_salida = (exit_p * qty) * MAKER_FEE if result == "WIN" else (exit_p * qty) * TAKER_FEE
-            
+
         total_fees = fee_entrada + fee_salida
         pnl_neto = pnl_bruto - total_fees
         capital += pnl_neto
-        last_trade_bar = j
+        last_trade_time = pd.Timestamp(trade_end_time)
+        if last_trade_time.tzinfo is None:
+            last_trade_time = last_trade_time.tz_localize("UTC")
 
         trades.append({
-            "time": str(times[i]), "close_time": str(times[j]),
+            "time": str(sig_times[i]), "close_time": str(trade_end_time),
             "symbol": symbol, "direction": direction,
             "entry": round(entry,4), "sl": round(sl,4), "tp": round(tp,4),
             "exit": round(exit_p,4), "result": result,
             "pnl_bruto": round(pnl_bruto, 4), "fees": round(total_fees, 4),
             "pnl": round(pnl_neto,4), "capital": round(capital,2),
             "score": 100, "vol_ratio": 1.0, "rsi": 50.0, "bias": "MEAN_REV",
-            "ob_zone": f"Band_{band_mult}s", 
-            "duration_min": float(j - i),
+            "ob_zone": f"Band_{band_mult}s",
+            "duration_min": round((pd.Timestamp(trade_end_time) - pd.Timestamp(sig_times[i])).total_seconds() / 60, 1),
+            "tf": tf,
         })
 
     return trades, capital
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ESTRATEGIA 2: VWAP CROSS — Entrada al cruce del VWAP, TP en banda opuesta
+# ══════════════════════════════════════════════════════════════════════════════
+def run_vwap_cross_backtest(df_1m, symbol, band_mult=2.0, risk_pct=0.03,
+                             max_duration=48, window=None, workdays_only=False,
+                             news_windows=None, tf="5m"):
+    """
+    Estrategia VWAP Cross:
+      - LONG  cuando close cruza el VWAP hacia arriba (close[i-1] < vwap[i-1] y close[i] >= vwap[i])
+      - SHORT cuando close cruza el VWAP hacia abajo
+      - TP = banda opuesta (upper para LONG, lower para SHORT)
+      - SL = banda del mismo lado (lower para LONG, upper para SHORT)
+      - RR variable según posición del VWAP entre las bandas (~1:1 en promedio)
+    """
+    trades  = []
+    capital = INITIAL_CAPITAL
+
+    df_signal = resample_candles(df_1m, tf)
+    df_signal = calculate_vwap_bands(df_signal, band_mult)
+
+    # Resolución en 1m para trades más precisos
+    use_1m_resolution = (tf != "1m")
+    if use_1m_resolution:
+        df_exec     = df_1m.copy()
+        exec_times  = df_exec["open_time"].values
+        exec_highs  = df_exec["high"].values
+        exec_lows   = df_exec["low"].values
+        exec_closes = df_exec["close"].values
+
+    sig_times    = df_signal["open_time"].values
+    sig_closes   = df_signal["close"].values
+    sig_vwaps    = df_signal["vwap"].values
+    sig_uppers   = df_signal["upper_band"].values
+    sig_lowers   = df_signal["lower_band"].values
+    sig_bar_nums = df_signal["bar_num"].values
+
+    tf_minutes  = {"1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240}
+    tf_min      = tf_minutes.get(tf, 5)
+    # max_duration en horas → convertir a barras del TF señal
+    max_bars    = int(max_duration * 60 / tf_min)
+    max_dur_1m  = max_bars * tf_min if use_1m_resolution else max_bars
+    cooldown_bars = 3  # barras del TF señal
+
+    last_trade_time = pd.Timestamp("2000-01-01", tz="UTC")
+
+    for i in range(max(10, 1), len(df_signal) - 1):
+        sig_time_i = pd.Timestamp(sig_times[i])
+        if sig_time_i.tzinfo is None:
+            sig_time_i = sig_time_i.tz_localize("UTC")
+
+        # Cooldown
+        minutes_since_last = (sig_time_i - last_trade_time).total_seconds() / 60
+        if minutes_since_last < cooldown_bars * tf_min:
+            continue
+
+        # Filtro primeras velas del día
+        if sig_bar_nums[i] < max(5, 30 // tf_min):
+            continue
+
+        # Filtros de ventana y día
+        if window is not None and not in_window(sig_times[i], window):
+            continue
+        if not in_workday(sig_times[i], workdays_only):
+            continue
+        if news_windows and in_news_window(sig_times[i], news_windows):
+            continue
+
+        close_prev = sig_closes[i - 1]
+        close_curr = sig_closes[i]
+        vwap_prev  = sig_vwaps[i - 1]
+        vwap_curr  = sig_vwaps[i]
+        upper      = sig_uppers[i]
+        lower      = sig_lowers[i]
+
+        # Detectar cruce
+        direction = None
+        if close_prev < vwap_prev and close_curr >= vwap_curr:
+            direction = "LONG"
+        elif close_prev > vwap_prev and close_curr <= vwap_curr:
+            direction = "SHORT"
+
+        if not direction:
+            continue
+
+        # Niveles
+        entry = vwap_curr
+        if direction == "LONG":
+            tp = upper
+            sl = lower
+        else:
+            tp = lower
+            sl = upper
+
+        reward  = abs(tp - entry)
+        sl_dist = abs(sl - entry)
+
+        # Filtro mínimo de reward (0.1% del precio)
+        if reward / entry < 0.001:
+            continue
+
+        # Resolver trade
+        result, exit_p = None, None
+        trade_end_time = sig_times[i]
+
+        if use_1m_resolution:
+            idx_start = np.searchsorted(exec_times, sig_times[i], side="left")
+            for j in range(idx_start, min(idx_start + max_dur_1m, len(df_exec))):
+                h1, l1 = exec_highs[j], exec_lows[j]
+                if direction == "LONG":
+                    if h1 >= tp and l1 <= sl:
+                        result, exit_p = "LOSS", sl
+                    elif l1 <= sl:
+                        result, exit_p = "LOSS", sl
+                    elif h1 >= tp:
+                        result, exit_p = "WIN", tp
+                else:
+                    if l1 <= tp and h1 >= sl:
+                        result, exit_p = "LOSS", sl
+                    elif h1 >= sl:
+                        result, exit_p = "LOSS", sl
+                    elif l1 <= tp:
+                        result, exit_p = "WIN", tp
+                if result:
+                    trade_end_time = exec_times[j]
+                    break
+        else:
+            for j in range(i + 1, min(i + max_bars, len(df_signal))):
+                h1 = sig_uppers[j]  # approx
+                l1 = sig_lowers[j]
+                hj = df_signal["high"].iloc[j] if hasattr(df_signal, 'iloc') else sig_closes[j]
+                lj = df_signal["low"].iloc[j]  if hasattr(df_signal, 'iloc') else sig_closes[j]
+                if direction == "LONG":
+                    if hj >= tp and lj <= sl: result, exit_p = "LOSS", sl; break
+                    elif lj <= sl:            result, exit_p = "LOSS", sl; break
+                    elif hj >= tp:            result, exit_p = "WIN",  tp; break
+                else:
+                    if lj <= tp and hj >= sl: result, exit_p = "LOSS", sl; break
+                    elif hj >= sl:            result, exit_p = "LOSS", sl; break
+                    elif lj <= tp:            result, exit_p = "WIN",  tp; break
+                trade_end_time = sig_times[j]
+
+        # Timeout — cerrar al precio actual
+        if not result:
+            if use_1m_resolution:
+                last_idx = min(idx_start + max_dur_1m, len(df_exec) - 1)
+                exit_p = float(exec_closes[last_idx])
+                trade_end_time = exec_times[last_idx]
+            else:
+                last_idx = min(i + max_bars, len(df_signal) - 1)
+                exit_p = float(sig_closes[last_idx])
+                trade_end_time = sig_times[last_idx]
+            result = "TIMEOUT"
+
+        # Calcular PnL
+        riesgo    = capital * risk_pct
+        qty       = riesgo / sl_dist if sl_dist > 0 else 0
+        pnl_bruto = (exit_p - entry) * qty if direction == "LONG" else (entry - exit_p) * qty
+        fee_entrada = entry  * qty * MAKER_FEE
+        fee_salida  = exit_p * qty * (MAKER_FEE if result == "WIN" else TAKER_FEE)
+        total_fees  = fee_entrada + fee_salida
+        pnl_neto    = pnl_bruto - total_fees
+        capital    += pnl_neto
+
+        last_trade_time = pd.Timestamp(trade_end_time)
+        if last_trade_time.tzinfo is None:
+            last_trade_time = last_trade_time.tz_localize("UTC")
+
+        rr_real = round(reward / sl_dist, 2) if sl_dist > 0 else 0
+        trades.append({
+            "time": str(sig_times[i]), "close_time": str(trade_end_time),
+            "symbol": symbol, "direction": direction,
+            "entry": round(entry, 4), "sl": round(sl, 4), "tp": round(tp, 4),
+            "exit": round(exit_p, 4), "result": result,
+            "pnl_bruto": round(pnl_bruto, 4), "fees": round(total_fees, 4),
+            "pnl": round(pnl_neto, 4), "capital": round(capital, 2),
+            "rr_real": rr_real,
+            "score": 100, "vol_ratio": 1.0, "rsi": 50.0, "bias": "CROSS",
+            "ob_zone": f"Cross_B{band_mult}",
+            "duration_min": round((pd.Timestamp(trade_end_time) - pd.Timestamp(sig_times[i])).total_seconds() / 60, 1),
+            "tf": tf,
+        })
+
+    return trades, capital
+
+
 # ── Reporte ───────────────────────────────────────────────────────────────────
-def summary_dict(trades, initial, final, symbol, dias, label, band_mult, rr, risk):
-    total = len(trades)
-    wins = sum(1 for t in trades if t["result"]=="WIN")
-    losses = total - wins
-    gp = sum(t["pnl"] for t in trades if t["pnl"]>0)
-    gl = abs(sum(t["pnl"] for t in trades if t["pnl"]<0))
+def summary_dict(trades, initial, final, symbol, dias, label, band_mult, rr, risk, tf="1m"):
+    total    = len(trades)
+    wins     = sum(1 for t in trades if t["result"] == "WIN")
+    losses   = sum(1 for t in trades if t["result"] == "LOSS")
+    timeouts = sum(1 for t in trades if t["result"] == "TIMEOUT")
+    gp = sum(t["pnl"] for t in trades if t["pnl"] > 0)
+    gl = abs(sum(t["pnl"] for t in trades if t["pnl"] < 0))
     pnl_bruto = sum(t.get("pnl_bruto", 0) for t in trades)
     fees = sum(t.get("fees", 0) for t in trades)
-    
+
     peak = initial
     mdd = 0
     for t in trades:
-        if t["capital"]>peak: peak=t["capital"]
-        dd = (peak-t["capital"])/peak
-        if dd>mdd: mdd=dd
-        
+        if t["capital"] > peak: peak = t["capital"]
+        dd = (peak - t["capital"]) / peak
+        if dd > mdd: mdd = dd
+
     return {
-        "label": label, 
-        "symbol": symbol, 
-        "ltf": "1m", 
+        "label": label,
+        "symbol": symbol,
+        "ltf": "1m",
         "htf": "VWAP",
-        "timeframe": "1m", 
-        "dias": dias, 
-        "band_mult": band_mult,  # Inyectado para el JSON
-        "rr": rr,                # Inyectado para el JSON
-        "risk_pct": risk,        # Inyectado para el JSON
+        "timeframe": tf,
+        "dias": dias,
+        "band_mult": band_mult,
+        "rr": rr,
+        "risk_pct": risk,
         "total": total, "wins": wins,
-        "losses": losses, "winrate": round(wins/total*100,1) if total else 0,
-        "profit_factor": round(gp/gl,2) if gl>0 else 0,
+        "losses": losses, "timeouts": timeouts,
+        "winrate": round(wins / total * 100, 1) if total else 0,
+        "profit_factor": round(gp / gl, 2) if gl > 0 else 0,
         "pnl_bruto": round(pnl_bruto, 2), "fees_totales": round(fees, 2),
-        "pnl_total": round(sum(t["pnl"] for t in trades),4),
-        "capital_final": round(final,2), "retorno_pct": round((final-initial)/initial*100,2),
-        "max_drawdown": round(mdd*100,2), "trades_per_day": round(total/max(dias,1),1),
-        "trades_per_day": round(total/max(dias,1),1),
+        "pnl_total": round(sum(t["pnl"] for t in trades), 4),
+        "capital_final": round(final, 2), "retorno_pct": round((final - initial) / initial * 100, 2),
+        "max_drawdown": round(mdd * 100, 2), "trades_per_day": round(total / max(dias, 1), 1),
     }
 def print_summary(s):
     ret_c = K.G if s['retorno_pct'] >= 0 else K.R
-    pf_c = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
-    wr_c = K.G if s['winrate'] >= 50 else K.Y if s['winrate'] >= 40 else K.R
-    print(f"\n{K.C}{'='*62}{K.X}\n  {K.B}📊 BACKTEST VWAP — {s['symbol']} | {s['dias']} días [Band: {s['band_mult']} RR: {s['rr']} Risk: {s['risk_pct']}%{K.X}]\n{K.C}{'='*62}{K.X}")
-    print(f"💹 Trades:        {K.B}{s['total']}{K.X} ({K.G}{s['wins']}W{K.X} / {K.R}{s['losses']}L{K.X})")
+    pf_c  = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
+    wr_c  = K.G if s['winrate'] >= 50 else K.Y if s['winrate'] >= 40 else K.R
+    print(f"\n{K.C}{'='*62}{K.X}\n  {K.B}📊 BACKTEST VWAP — {s['symbol']} | {s['timeframe']} | {s['dias']} días [Band: {s['band_mult']} RR: {s['rr']} Risk: {s['risk_pct']}%{K.X}]\n{K.C}{'='*62}{K.X}")
+    timeouts = s.get('timeouts', 0)
+    print(f"💹 Trades:        {K.B}{s['total']}{K.X} ({K.G}{s['wins']}W{K.X} / {K.R}{s['losses']}L{K.X} / {K.Y}{timeouts}T{K.X})")
     print(f"📈 Win rate:      {wr_c}{s['winrate']}%{K.X}")
     print(f"⚖️ Profit factor: {pf_c}{s['profit_factor']}{K.X}")
     print(f"💰 PnL NETO:      {ret_c}{s['pnl_total']:+.2f} USDT{K.X} (Fees: {s['fees_totales']:.2f})")
@@ -270,7 +721,6 @@ def print_summary(s):
     print(f"📉 Max Drawdown:  {K.Y}{s['max_drawdown']}%{K.X}")
     print(f"🤑 Trades/día:    {K.C}{s['trades_per_day']}{K.X}")
     print(f"{K.C}{'='*62}{K.X}")
-    
 def print_monthly(trades):
     if not trades:
         print(f"  {K.D}Sin trades.{K.X}"); return
@@ -305,57 +755,127 @@ def print_monthly(trades):
 
 def main():
     p = argparse.ArgumentParser(description="Backtest VWAP Reversion")
-    p.add_argument("--symbol", default="BTCUSDT", help="Select SYMBOL to scan, default = BTCUSDT")
-    p.add_argument("--dias", type=int, default=90, help="Dias a escanear. default = 90")
-    p.add_argument("--rr", type=str, default='0.5', help="Risk/Ratio %%, default = 0.5")
-    p.add_argument("--band-mult", type=float, default=2.5, help="default 2.5")
-    p.add_argument("--min-profit", type=float, default=0.20, help="Porcentaje minimo de profit para ignorar fees")
-    p.add_argument("--risk", type=float, default=1, help="Riesgo por trade en porcentaje (ej: 1.0 para 1%%) default = 1")
-    p.add_argument("--sweep-rr", action="store_true", help="Prueba diferentes RR (0.2, 0.3, 0.4, 0.5, 0.7)")
-    p.add_argument("--scan", action="store_true",help="Escanea BTCUSDT - ETHUSDT")
+    p.add_argument("--symbol",     default="BTCUSDT")
+    p.add_argument("--dias",       type=int, default=90)
+    p.add_argument("--rr",         type=str, default='0.5')
+    p.add_argument("--band-mult",  type=str, default='2.5')
+    p.add_argument("--min-profit", type=float, default=0.20)
+    p.add_argument("--risk",       type=str, default='1')
+    p.add_argument("--sweep-rr",   action="store_true")
+    p.add_argument("--scan",       action="store_true")
+    p.add_argument("--windows",    type=str, default="24h")
+    p.add_argument("--days",       type=str, default="allweek",
+                   help="Dias a operar: allweek (default) | workdays (lun-vie) | allweek;workdays para comparar")
+    p.add_argument("--no-news",    action="store_true",
+                   help="Simular filtro de noticias: excluir velas en ventana de eventos high-impact (FCS API)")
+    p.add_argument("--tf",           type=str, default="1m",
+                   help="Timeframe(s) para señales VWAP. Ej: 1m | 5m | 15m,1h | 1m;5m;15m;1h (semicolon=sweep)")
+    p.add_argument("--max-duration", type=float, default=1.0,
+                   help="Duración máxima en HORAS (default: 1h). Ej: 0.5=30min, 4=4h, 48=2días.")
+    p.add_argument("--strategy",     type=str, default="reversion",
+                   help="Estrategia: reversion (default) | cross")
     args = p.parse_args()
 
     client = Client(os.getenv("BINANCE_API_KEY",""), os.getenv("BINANCE_API_SECRET",""))
     symbols = ["BTCUSDT", "ETHUSDT"] if args.scan else [args.symbol]
-    
-    # RRs ajustados para enfocarnos en los rentables (< 1.0)
-    #rrs = [0.2, 0.3, 0.4, 0.5, 0.7] if args.sweep_rr else [args.rr]
+
     if args.sweep_rr:
-        rrs = [0.2, 0.3, 0.4, 0.5, 0.7] 
+        rrs = [0.2, 0.3, 0.4, 0.5, 0.7]
     else:
         rrs = [float(x) for x in args.rr.split(',')]
-    
+
+    windows_raw = [w.strip() for w in args.windows.split(';')]
+    windows = [(w, parse_window(w)) for w in windows_raw]
+
+    days_raw = [d.strip() for d in args.days.split(';')]
+    days_list = [(d, d == 'workdays') for d in days_raw]
+
+    band_mults = [float(x) for x in args.band_mult.split(',')]
+    risks      = [float(x) for x in args.risk.split(',')]
+
+    # ── Timeframes ──────────────────────────────────────────────────────────
+    timeframes = [tf.strip() for tf in args.tf.replace(',', ';').split(';') if tf.strip()]
+    if not timeframes:
+        timeframes = ["1m"]
+
+    # ── Cargar ventanas de noticias una sola vez (si --no-news activo) ────────
+    # Se cachea por símbolo; si hay sweep multi-symbol, se carga una vez por cada uno
+    news_windows_cache = {}
+    if args.no_news:
+        print(f"\n{K.Y}📰 Modo --no-news activo. Cargando eventos de alto impacto...{K.X}")
+        for sym in symbols:
+            news_windows_cache[sym] = load_news_windows(sym, args.dias)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    total_combos = len(symbols) * len(band_mults) * len(rrs) * len(risks) * len(windows) * len(days_list) * len(timeframes)
+    if total_combos > 1:
+        print(f"\n{K.C}{'═'*62}{K.X}")
+        print(f"  {K.B}SWEEP: {total_combos} combinaciones{K.X}  "
+              f"symbols={symbols}  tf={timeframes}  band={band_mults}  rr={rrs}  risk={risks}  windows={windows_raw}  days={days_raw}")
+        print(f"{K.C}{'═'*62}{K.X}\n")
+
     all_summaries = []
     ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
     os.makedirs("backtest/results", exist_ok=True)
 
     for symbol in symbols:
         df_1m = fetch_candles(client, symbol, "1m", args.dias)
-        for rr_val in rrs:
-            label = f"VWAP_B{args.band_mult}_RR{rr_val}_RSK{args.risk}"
-            risk_decimal = args.risk / 100.0
-            
-            trades, final = run_vwap_backtest(
-                df_1m, symbol, 
-                rr=rr_val, band_mult=args.band_mult, 
-                min_profit_pct=args.min_profit,
-                risk_pct=risk_decimal
-            )
-            
-            s = summary_dict(trades, INITIAL_CAPITAL, final, symbol, args.dias, label, args.band_mult, rr_val, args.risk)
-            s["trades"] = trades
-            print_summary(s)
-            print_monthly(trades)
-            all_summaries.append(s)
+        nw = news_windows_cache.get(symbol, None)
+        for tf_val in timeframes:
+            for band_val in band_mults:
+                for rr_val in rrs:
+                    for risk_val in risks:
+                        for win_label, win_parsed in windows:
+                          for day_label, workdays_only in days_list:
+                            news_tag = "_NEWS" if args.no_news else ""
+                            label = f"VWAP_{tf_val}_B{band_val}_RR{rr_val}_RSK{risk_val}_W{win_label}_D{day_label}{news_tag}"
+                            risk_decimal = risk_val / 100.0
+                            tf_minutes_map = {"1m":1,"3m":3,"5m":5,"15m":15,"30m":30,"1h":60,"2h":120,"4h":240}
+                            tf_min = tf_minutes_map.get(tf_val, 1)
 
-    data_out = {"summaries": []}
-    # Generar un nombre de archivo descriptivo
+                            if args.strategy == "cross":
+                                trades, final = run_vwap_cross_backtest(
+                                    df_1m, symbol,
+                                    band_mult=band_val,
+                                    risk_pct=risk_decimal,
+                                    max_duration=args.max_duration,
+                                    window=win_parsed,
+                                    workdays_only=workdays_only,
+                                    news_windows=nw,
+                                    tf=tf_val,
+                                )
+                                label = f"CROSS_{tf_val}_B{band_val}_RSK{risk_val}_W{win_label}_D{day_label}"
+                            else:
+                                max_bars_rev = int(args.max_duration * 60 / tf_min)
+                                trades, final = run_vwap_backtest(
+                                    df_1m, symbol,
+                                    rr=rr_val, band_mult=band_val,
+                                    min_profit_pct=args.min_profit,
+                                    risk_pct=risk_decimal,
+                                    window=win_parsed,
+                                    workdays_only=workdays_only,
+                                    news_windows=nw,
+                                    tf=tf_val,
+                                    max_duration=max_bars_rev,
+                                )
+
+                            s = summary_dict(trades, INITIAL_CAPITAL, final, symbol, args.dias, label, band_val, rr_val, risk_val, tf=tf_val)
+                            s["trades"] = trades
+                            print_summary(s)
+                            print_monthly(trades)
+                            all_summaries.append(s)
+
+    # Nombre descriptivo: single → detallado, multi → SWEEP
+    news_suffix = "_NEWS" if args.no_news else ""
     if len(all_summaries) == 1:
         s = all_summaries[0]
-        # Creamos el nombre: backtest_ETHUSDT_B2.5_RR0.4_RSK4.0.json
-        filename = f"backtest_{s['symbol']}_B{args.band_mult}_RR{s['rr']}_RSK{args.risk}_{ts_str}.json"
+        win_str = windows_raw[0].replace('-','_')
+        day_str = days_raw[0]
+        tf_str = timeframes[0]
+        filename = f"backtest_{s['symbol']}_{tf_str}_B{s['band_mult']}_RR{s['rr']}_RSK{s['risk_pct']}_W{win_str}_D{day_str}{news_suffix}_{ts_str}.json"
     else:
-        filename = f"backtest_SCAN_{ts_str}.json"
+        tf_tag = "_".join(timeframes) if len(timeframes) <= 3 else f"{len(timeframes)}TFs"
+        filename = f"backtest_SWEEP_{args.symbol}_{tf_tag}{news_suffix}_{ts_str}.json"
     if len(all_summaries) > 1:
         ranked = sorted(all_summaries, key=lambda x: x["profit_factor"], reverse=True)
         print(f"\n{K.C}{'═'*62}{K.X}")
@@ -365,11 +885,13 @@ def main():
             pf_c = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
             pnl_c = K.G if s['pnl_total'] >= 0 else K.R
             medal = " 🥇" if idx == 1 else " 🥈" if idx == 2 else " 🥉" if idx == 3 else f" {idx}."
-            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}Risk/Reward: {s['rr']}{K.X}] "
+            print(f"   {medal} {K.B}{s['symbol']}{K.X} {K.C}{s['timeframe']}{K.X} [{K.Y}R/R: {s['rr']}{K.X}] "
+                  f"Band={s['band_mult']}{K.X} "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
-                  f"DD={s['max_drawdown']}%")
+                  f"PnL ={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
+                  f"DD={s['max_drawdown']}%{K.X} "
+                  f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")    
         ranked = sorted(all_summaries, key=lambda x: x["pnl_total"], reverse=True)
         print(f"\n{K.C}{'═'*62}{K.X}")
@@ -379,11 +901,13 @@ def main():
             pf_c = K.G if s['profit_factor'] >= 1.3 else K.Y if s['profit_factor'] >= 1.0 else K.R
             pnl_c = K.G if s['pnl_total'] >= 0 else K.R
             medal = " 🥇" if idx == 1 else " 🥈" if idx == 2 else " 🥉" if idx == 3 else f" {idx}."
-            print(f"   {medal} {K.B}{s['symbol']}{K.X} [{K.Y}Risk/Reward: {s['rr']}{K.X}] "
+            print(f"   {medal} {K.B}{s['symbol']}{K.X} {K.C}{s['timeframe']}{K.X} [{K.Y}R/R: {s['rr']}{K.X}] "
+                  f"Band={s['band_mult']}{K.X} "
                   f"PF={pf_c}{s['profit_factor']}{K.X} "
                   f"WR={s['winrate']}% "
-                  f"PnL ={pnl_c}{s['retorno_pct']:+.2f}%{K.X} "
-                  f"DD={s['max_drawdown']}%")
+                  f"PnL={pnl_c}{s['retorno_pct']:+.0f}%{K.X} "
+                  f"DD={s['max_drawdown']}%{K.X} "
+                  f"Risk={s['risk_pct']}")
         print(f"{K.C}{'═'*62}{K.X}")
 
     out = os.path.join("backtest/results", filename)
