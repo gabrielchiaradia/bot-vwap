@@ -258,6 +258,25 @@ def _on_mark_price_tick(mark_price: float):
             if _precio_anterior <= 0:
                 _precio_anterior = mark_price
                 return
+            # !!! FILTRO DE SEGURIDAD: ANCHO DE BANDA MÍNIMO !!!
+            # Calculamos qué tan separadas están las bandas (volatilidad real de 1m)
+            ancho_banda_pct = (bandas["upper"] - bandas["lower"]) / bandas["vwap"]
+            # Definimos umbrales según el bot o símbolo
+            if "BTC" in SYMBOL:
+                UMBRAL_MINIMO = 0.005  # 0.5% para BTC (más estable)
+            elif "SOL" in SYMBOL:
+                UMBRAL_MINIMO = 0.01  # 1% para SOL (necesita más aire)
+            else:
+                UMBRAL_MINIMO = 0.008  # Default para otros
+            
+            if ancho_banda_pct < UMBRAL_MINIMO:
+                # Si las bandas están muy pegadas, ignoramos el Cross para evitar ruidos
+                if cycle_count % 5 == 0: # Para no spamear el log, logueamos cada tanto
+                    logger.warning("[%s] CROSS abortado: Bandas demasiado estrechas (%.2f%%)", 
+                                   SYMBOL, ancho_banda_pct * 100)
+                _precio_anterior = mark_price
+                return
+            
             signal, entry_price, tp_price, sl_price = evaluar_cruce_vwap(
                 mark_price, bandas, _precio_anterior
             )
