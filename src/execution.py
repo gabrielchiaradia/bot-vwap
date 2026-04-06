@@ -229,13 +229,41 @@ def sincronizar_realidad_vs_journal(client, symbol):
                     )
                     modified = True
                 else:
-                    # Cancelar los demás PENDING_FILL duplicados
-                    logger.warning(f"[{symbol}] PENDING_FILL duplicado cancelado: {t['trade_id']}")
-                    t['status'] = 'CANCELLED'
-                    t['close_time'] = ahora
-                    t['result'] = 'CANCELLED'
-                    modified = True
-                    # NO activa cooldown — no hubo trade real
+                    # Verificar si la orden sigue activa en Binance antes de cancelar
+                    try:
+                        ordenes_abiertas = client.futures_get_open_orders(symbol=symbol)
+                        sigue_activa = any(
+                            abs(float(o.get('price', 0)) - float(t.get('entry_price', 0))) < 0.02
+                            for o in ordenes_abiertas
+                            if o.get('side') == ('BUY' if t['direction'] == 'LONG' else 'SELL')
+                        )
+                    except Exception:
+                        sigue_activa = True  # ante la duda, no cancelar
+
+                    if sigue_activa:
+                        logger.info(f"[{symbol}] PENDING_FILL sigue activo en Binance — esperando fill.")
+                    else:
+                        # Recheck final: puede haberse llenado justo ahora
+                        pos_recheck = get_open_position(client, symbol)
+                        if pos_recheck:
+                            logger.info(f"[{symbol}] ✅ PENDING_FILL ejecutado en recheck. Promoviendo a OPEN.")
+                            t['status'] = 'OPEN'
+                            try:
+                                side = "BUY" if t['direction'] == "LONG" else "SELL"
+                                place_sl_tp(client, symbol, side, float(t['quantity']), float(t['sl_price']), float(t['tp_price']))
+                            except Exception as e:
+                                logger.error(f"[{symbol}] Error colocando SL/TP en recheck: {e}")
+                            crear_notifier().alert_trade_open(
+                                symbol, t['direction'], float(t['entry_price']),
+                                float(t['sl_price']), float(t['tp_price']),
+                                float(t['quantity']), float(t['risk_pct'])
+                            )
+                        else:
+                            logger.warning(f"[{symbol}] PENDING_FILL cancelado/expirado en Binance: {t['trade_id']}")
+                            t['status'] = 'CANCELLED'
+                            t['close_time'] = ahora
+                            t['result'] = 'CANCELLED'
+                        modified = True
 
             if modified:
                 _save(all_trades)
@@ -258,25 +286,53 @@ def sincronizar_realidad_vs_journal(client, symbol):
         # CASO 2: SE ABRIÓ A MANO DESDE EL CELULAR/PC
         # ==========================================
         elif pos_real and not only_open_in_journal:
-            logger.warning(f"[{symbol}] ⚠️ Detectada posición abierta a mano. Registrando en Journal...")
+            # Verificar si la posición pertenece a otro bot VWAP del mismo símbolo
+            # Para evitar que SOL2 registre como MANUAL lo que abrió SOL (y viceversa)
+            try:
+                import json, os
+                log_dir = os.path.dirname(os.path.abspath(__file__)).replace('/src', '/logs') 
+                # Buscar journals de otros bots
+                otros_journals = [
+                    f for f in os.listdir('logs') 
+                    if f.startswith('journal_') and f != f'journal_{BOT_ID}.json'
+                ]
+                posicion_de_otro_bot = False
+                for jfile in otros_journals:
+                    try:
+                        with open(f'logs/{jfile}', 'r') as f:
+                            otros_trades = json.load(f)
+                        if any(
+                            t.get('symbol') == symbol and 
+                            t.get('status') in ('OPEN', 'PENDING_FILL')
+                            for t in otros_trades
+                        ):
+                            posicion_de_otro_bot = True
+                            logger.info(f"[{symbol}] Posición abierta pertenece a otro bot ({jfile}). Ignorando.")
+                            break
+                    except Exception:
+                        pass
+            except Exception:
+                posicion_de_otro_bot = False
 
-            nuevo_trade = {
-                "trade_id": f"MANUAL-{str(uuid.uuid4())[:4]}",
-                "bot_id": "MANUAL",
-                "symbol": symbol,
-                "direction": pos_real['side'],
-                "entry_price": pos_real['entry'],
-                "sl_price": 0.0,
-                "tp_price": 0.0,
-                "quantity": pos_real['size'],
-                "risk_pct": 0.0,
-                "status": "OPEN",
-                "entry_time": ahora,
-                "close_time": None,
-                "pnl_usdt": 0.0
-            }
-            all_trades.append(nuevo_trade)
-            modified = True
+            if not posicion_de_otro_bot:
+                logger.warning(f"[{symbol}] ⚠️ Detectada posición abierta a mano. Registrando en Journal...")
+                nuevo_trade = {
+                    "trade_id": f"MANUAL-{str(uuid.uuid4())[:4]}",
+                    "bot_id": "MANUAL",
+                    "symbol": symbol,
+                    "direction": pos_real['side'],
+                    "entry_price": pos_real['entry'],
+                    "sl_price": 0.0,
+                    "tp_price": 0.0,
+                    "quantity": pos_real['size'],
+                    "risk_pct": 0.0,
+                    "status": "OPEN",
+                    "entry_time": ahora,
+                    "close_time": None,
+                    "pnl_usdt": 0.0
+                }
+                all_trades.append(nuevo_trade)
+                modified = True
 
         # ==========================================
         # CASO 3: FLIP A MANO

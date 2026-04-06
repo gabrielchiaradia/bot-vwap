@@ -163,21 +163,26 @@ def evaluar_precio_intra_vela(mark_price: float, bandas: dict) -> tuple:
 
 
 def _cooldown_activo() -> bool:
-    """Verifica si el cooldown post-trade está activo."""
+    """Verifica si el cooldown post-trade está activo.
+    Aplica también a CANCELLED para evitar spam de órdenes."""
     try:
         from src.journal import _load
         from src.config import BOT_ID
         trades = _load()
-        mis_trades = [t for t in trades if t.get('bot_id') == BOT_ID and t.get('status') == 'CLOSED']
+        mis_trades = [
+            t for t in trades
+            if t.get('bot_id') == BOT_ID
+            and t.get('status') in ('CLOSED', 'CANCELLED')
+            and t.get('close_time')
+        ]
         if mis_trades:
             ultimo_trade = mis_trades[-1]
-            if ultimo_trade.get('close_time'):
-                last_time = datetime.fromisoformat(ultimo_trade['close_time'])
-                now = datetime.now(timezone.utc)
-                minutos_pasados = (now - last_time).total_seconds() / 60.0
-                if minutos_pasados < 10:
-                    logger.debug("Cooldown activo. Faltan %.1f minutos.", 10 - minutos_pasados)
-                    return True
+            last_time = datetime.fromisoformat(ultimo_trade['close_time'])
+            now = datetime.now(timezone.utc)
+            minutos_pasados = (now - last_time).total_seconds() / 60.0
+            if minutos_pasados < 10:
+                logger.debug("Cooldown activo. Faltan %.1f minutos.", 10 - minutos_pasados)
+                return True
     except Exception:
         pass
     return False
