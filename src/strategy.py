@@ -222,28 +222,23 @@ def evaluar_cruce_vwap(mark_price: float, bandas: dict, precio_anterior: float) 
     lower = bandas["lower"]
     vwap  = bandas["vwap"]
 
-    # Filtro: bandas demasiado comprimidas (menos de 1% del precio)
-    # Evita operar al inicio del d├¡a cuando las bandas est├ín colapsadas
-    if (upper - lower) / vwap < 0.02:
-        return None, None, None, None
-
     # LONG: cruce hacia arriba
     if precio_anterior < vwap and mark_price >= vwap:
         entry = vwap
-        tp    = upper
-        sl    = lower
-        reward = abs(tp - entry)
-        if reward / entry > 0.001:  # m├¡nimo 0.1% de reward
-            return "LONG", entry, tp, sl
+        sl    = lower  # Banda opuesta
+        distancia_riesgo = entry - sl
+        tp    = entry + distancia_riesgo  # RR 1:1 fijo
+        
+        return "LONG", entry, tp, sl
 
     # SHORT: cruce hacia abajo
     elif precio_anterior > vwap and mark_price <= vwap:
         entry = vwap
-        tp    = lower
-        sl    = upper
-        reward = abs(entry - tp)
-        if reward / entry > 0.001:
-            return "SHORT", entry, tp, sl
+        sl    = upper  # Banda opuesta
+        distancia_riesgo = sl - entry
+        tp    = entry - distancia_riesgo  # RR 1:1 fijo
+        
+        return "SHORT", entry, tp, sl
 
     return None, None, None, None
 
