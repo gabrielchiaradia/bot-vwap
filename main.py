@@ -28,15 +28,11 @@ client      = None
 # ── Estado compartido entre threads ───────────────────────────────────────────
 _bandas_actuales: dict | None = None
 _bandas_lock      = threading.Lock()
-<<<<<<< HEAD
 _entrada_lock     = threading.Lock()   # lock atómico para evitar doble entrada
 _entrada_en_curso = False              # flag protegido por _entrada_lock
 _pos_abierta:     bool = False         # evita chequeo intravela
-=======
-_entrada_en_curso = threading.Event()   # evita doble entrada intra-vela
-_pos_abierta:     bool = False          # evita chequeo intravela
-_precio_anterior: float = 0.0          # para detectar cruce del VWAP (cross strategy)
->>>>>>> 5b4c7e66c84d89486715958aa02a9e432af78dc9
+_precio_anterior: float = 0.0         # para detectar cruce del VWAP (cross strategy)
+
 
 def inicializar():
     """Configuracion unica al arrancar el contenedor."""
@@ -56,14 +52,14 @@ def inicializar():
 
 def _on_candle_close(df_velas, buffer):
     """
-    Callback al cierre de cada vela (1m).
+    Callback al cierre de cada vela.
     Responsabilidades:
       1. Auditoría de cuenta y posición
       2. Actualizar bandas para el siguiente período intra-vela
       3. Dashboard
-    La entrada ya NO se dispara aquí — lo hace _on_mark_price_tick().
+    La entrada NO se dispara aquí — lo hace _on_mark_price_tick().
     """
-    global cycle_count, _bandas_actuales
+    global cycle_count, _bandas_actuales, _entrada_en_curso, _pos_abierta
 
     try:
         if cycle_count % 60 == 0:
@@ -82,7 +78,6 @@ def _on_candle_close(df_velas, buffer):
         sincronizar_realidad_vs_journal(client, SYMBOL)
 
         # 3. Gestión de posición abierta
-        global _pos_abierta
         pos_abierta = get_open_position(client, SYMBOL)
         _pos_abierta = pos_abierta is not None
         if pos_abierta:
@@ -93,11 +88,11 @@ def _on_candle_close(df_velas, buffer):
             nuevas_bandas = actualizar_bandas_cross(df_velas)
         else:
             nuevas_bandas = actualizar_bandas(df_velas)
+
         with _bandas_lock:
             _bandas_actuales = nuevas_bandas
 
         # Limpiar flag de entrada solo si no hay PENDING_FILL activo
-        global _entrada_en_curso
         historial = _load()
         hay_pending = any(
             t.get('symbol') == SYMBOL and t.get('status') == 'PENDING_FILL'
@@ -133,26 +128,17 @@ def _on_candle_close(df_velas, buffer):
 def _on_mark_price_tick(mark_price: float):
     """
     Callback en cada tick de mark price (~1s).
-<<<<<<< HEAD
-    Evalúa si el precio toca una banda y dispara entrada inmediata.
+    Estrategia reversion: evalúa toque de banda.
+    Estrategia cross: evalúa cruce del VWAP.
     Usa lock atómico para evitar race condition con múltiples ticks simultáneos.
     La ejecución de la orden se hace en thread separado para no bloquear el stream.
     """
-    global _entrada_en_curso
+    global _entrada_en_curso, _precio_anterior
 
     # Check atómico — si ya hay entrada en curso, salir inmediatamente
     with _entrada_lock:
         if _entrada_en_curso:
             return
-=======
-    Estrategia reversion: evalúa toque de banda.
-    Estrategia cross: evalúa cruce del VWAP.
-    """
-    global _bandas_actuales, _precio_anterior
-
-    if _entrada_en_curso.is_set():
-        return
->>>>>>> 5b4c7e66c84d89486715958aa02a9e432af78dc9
 
     with _bandas_lock:
         bandas = _bandas_actuales
@@ -184,28 +170,6 @@ def _on_mark_price_tick(mark_price: float):
             _precio_anterior = mark_price
             return
 
-<<<<<<< HEAD
-        # ── Evaluar toque de banda ────────────────────────────────────────
-        signal, entry_price, tp_vwap = evaluar_precio_intra_vela(mark_price, bandas)
-        if not signal:
-            return
-
-        # ── Marcar entrada en curso ATÓMICAMENTE ─────────────────────────
-        with _entrada_lock:
-            if _entrada_en_curso:
-                return  # otro tick llegó antes
-            _entrada_en_curso = True
-
-        logger.info("[%s] 🎯 Toque de banda | Mark: %.2f | Signal: %s | Entry: %.2f | TP: %.2f",
-                    SYMBOL, mark_price, signal, entry_price, tp_vwap)
-
-        # ── Calcular SL y tamaño ──────────────────────────────────────────
-        account  = get_account_status(client)
-        reward   = abs(tp_vwap - entry_price)
-        dist_sl  = reward / TP_RR_RATIO
-        sl_price = entry_price - dist_sl if signal == "LONG" else entry_price + dist_sl
-        qty      = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
-=======
         # ── Evaluar señal según estrategia ────────────────────────────────
         if STRATEGY == "cross":
             if _precio_anterior <= 0:
@@ -214,10 +178,6 @@ def _on_mark_price_tick(mark_price: float):
             signal, entry_price, tp_price, sl_price = evaluar_cruce_vwap(
                 mark_price, bandas, _precio_anterior
             )
-            if signal:
-                logger.info(f"[{SYMBOL}] 🎯 Cruce detectado: {signal} | prev={_precio_anterior:.2f} | now={mark_price:.2f} | vwap={bandas['vwap']:.2f}")
-            else:
-                logger.debug(f"[{SYMBOL}] tick cross | prev={_precio_anterior:.2f} | now={mark_price:.2f} | vwap={bandas['vwap']:.2f}")
         else:
             signal, entry_price, tp_vwap = evaluar_precio_intra_vela(mark_price, bandas)
             if signal:
@@ -234,30 +194,25 @@ def _on_mark_price_tick(mark_price: float):
         if not signal:
             return
 
-        # Marcar entrada en curso (atómico)
-        if not _entrada_en_curso.is_set():
-            _entrada_en_curso.set()
-        else:
-            return
+        # ── Marcar entrada en curso ATÓMICAMENTE ─────────────────────────
+        with _entrada_lock:
+            if _entrada_en_curso:
+                return  # otro tick llegó antes
+            _entrada_en_curso = True
 
         logger.info("[%s] 🎯 Señal %s | Mark: %.2f | Signal: %s | Entry: %.2f | TP: %.2f | SL: %.2f",
                     SYMBOL, STRATEGY.upper(), mark_price, signal, entry_price, tp_price, sl_price)
 
         # ── Calcular tamaño ───────────────────────────────────────────────
         account = get_account_status(client)
-        qty = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
->>>>>>> 5b4c7e66c84d89486715958aa02a9e432af78dc9
+        qty     = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
 
         # Cap por margen disponible
         notional     = qty * entry_price
         max_notional = account['available'] * LEVERAGE * 0.8
         if notional > max_notional:
             qty_capped = round(max_notional / entry_price, 3)
-<<<<<<< HEAD
             logger.warning("[%s] Qty capado: %.4f -> %.4f", SYMBOL, qty, qty_capped)
-=======
-            logger.warning("[%s] Qty capado por margen: %.4f -> %.4f", SYMBOL, qty, qty_capped)
->>>>>>> 5b4c7e66c84d89486715958aa02a9e432af78dc9
             qty = qty_capped
 
         if qty <= 0:
@@ -266,14 +221,20 @@ def _on_mark_price_tick(mark_price: float):
                 _entrada_en_curso = False
             return
 
-<<<<<<< HEAD
         # ── Ejecutar en thread separado para no bloquear el stream ────────
+        _tp  = tp_price
+        _sl  = sl_price
+        _sig = signal
+        _ep  = entry_price
+        _bal = account['wallet_balance']
+        _qty = qty
+
         def _ejecutar():
             global _entrada_en_curso
             try:
                 ejecutar_apertura_completa(
-                    client, SYMBOL, signal, entry_price, sl_price, tp_vwap,
-                    qty, RISK_PER_TRADE, balance_at_open=account['wallet_balance']
+                    client, SYMBOL, _sig, _ep, _sl, _tp,
+                    _qty, RISK_PER_TRADE, balance_at_open=_bal
                 )
             except Exception as e:
                 logger.error(f"Error en ejecución de apertura: {e}", exc_info=True)
@@ -290,21 +251,6 @@ def _on_mark_price_tick(mark_price: float):
 
         threading.Thread(target=_ejecutar, daemon=True, name="ejecutar-apertura").start()
 
-=======
-        ejecutar_apertura_completa(
-            client, SYMBOL, signal, entry_price, sl_price, tp_price,
-            qty, RISK_PER_TRADE, balance_at_open=account['wallet_balance']
-        )
-        # Liberar solo si no quedó PENDING_FILL — si quedó, bloqueamos
-        # hasta que el sincronizador lo resuelva en el próximo ciclo
-        historial = _load()
-        hay_pending = any(
-            t.get('symbol') == SYMBOL and t.get('status') == 'PENDING_FILL'
-            for t in historial
-        )
-        if not hay_pending:
-            _entrada_en_curso.clear()
->>>>>>> 5b4c7e66c84d89486715958aa02a9e432af78dc9
     except Exception as e:
         logger.error(f"Error en _on_mark_price_tick: {e}", exc_info=True)
         with _entrada_lock:
@@ -319,14 +265,12 @@ def main():
     logger.info("Descargando historial inicial para el buffer...")
     df_historico = get_klines_rest(client, SYMBOL, TIMEFRAME, limite=1500)
 
-    # ── Stream de velas (cierre de vela → actualizar bandas y auditoría) ──
-    logger.info("Conectando al WebSocket de velas...")
-    # candles_minimos: en 1m necesitamos 120 de bar_num + margen
-    # en 5m son 5 velas de inicio de sesión + historial del día
-    tf_min_map   = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60}
-    tf_min_val   = tf_min_map.get(TIMEFRAME, 1)
-    candles_min  = max(50, int(1440 / tf_min_val) + 10)  # velas de 1 día + margen
+    # candles_minimos se ajusta según el timeframe
+    tf_min_map  = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60}
+    tf_min_val  = tf_min_map.get(TIMEFRAME, 1)
+    candles_min = max(50, int(1440 / tf_min_val) + 10)
 
+    logger.info("Conectando al WebSocket de velas...")
     stream_kline = BinanceKlineStream(
         symbol          = SYMBOL,
         interval        = TIMEFRAME,
@@ -337,7 +281,6 @@ def main():
     )
     stream_kline.iniciar(df_historico)
 
-    # ── Stream de mark price (intra-vela → disparar entradas) ─────────────
     logger.info("Conectando al WebSocket de mark price...")
     stream_mark = MarkPriceStream(
         symbol  = SYMBOL,
