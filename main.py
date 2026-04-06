@@ -22,12 +22,11 @@ cycle_count = 0
 client      = None
 
 # ── Estado compartido entre threads ───────────────────────────────────────────
-# Las bandas se actualizan al cierre de cada vela (thread WS kline).
-# El mark price las lee para evaluar entradas (thread WS markprice).
 _bandas_actuales: dict | None = None
 _bandas_lock      = threading.Lock()
-_entrada_en_curso = threading.Event()   # evita doble entrada intra-vela
-_pos_abierta:     bool = False # evita chequeo intravela
+_entrada_lock     = threading.Lock()   # lock atómico para evitar doble entrada
+_entrada_en_curso = False              # flag protegido por _entrada_lock
+_pos_abierta:     bool = False         # evita chequeo intravela
 
 def inicializar():
     """Configuracion unica al arrancar el contenedor."""
@@ -82,14 +81,17 @@ def _on_candle_close(df_velas, buffer):
         nuevas_bandas = actualizar_bandas(df_velas)
         with _bandas_lock:
             _bandas_actuales = nuevas_bandas
-            # Solo limpiar si no hay PENDING_FILL activo
-            historial = _load()
-            hay_pending = any(
-                t.get('symbol') == SYMBOL and t.get('status') == 'PENDING_FILL'
-                for t in historial
-            )
-            if not hay_pending:
-                _entrada_en_curso.clear()
+
+        # Limpiar flag de entrada solo si no hay PENDING_FILL activo
+        global _entrada_en_curso
+        historial = _load()
+        hay_pending = any(
+            t.get('symbol') == SYMBOL and t.get('status') == 'PENDING_FILL'
+            for t in historial
+        )
+        if not hay_pending:
+            with _entrada_lock:
+                _entrada_en_curso = False
 
         if nuevas_bandas:
             logger.info("Bandas | Upper: %.2f | Lower: %.2f | VWAP: %.2f",
@@ -118,26 +120,25 @@ def _on_mark_price_tick(mark_price: float):
     """
     Callback en cada tick de mark price (~1s).
     Evalúa si el precio toca una banda y dispara entrada inmediata.
-    Este es el punto donde se replica la lógica del backtest:
-    entrar al momento del toque, no al cierre de vela.
+    Usa lock atómico para evitar race condition con múltiples ticks simultáneos.
+    La ejecución de la orden se hace en thread separado para no bloquear el stream.
     """
-    global _bandas_actuales
+    global _entrada_en_curso
 
-    # Si ya hay una entrada en curso en esta vela, no hacer nada
-    if _entrada_en_curso.is_set():
-        return
+    # Check atómico — si ya hay entrada en curso, salir inmediatamente
+    with _entrada_lock:
+        if _entrada_en_curso:
+            return
 
-    # Leer bandas con lock mínimo
     with _bandas_lock:
         bandas = _bandas_actuales
 
     if not bandas:
         return
 
-    # Verificar filtros rápidos antes de evaluar precio
     try:
         # ── Filtro de noticias ────────────────────────────────────────────
-        news_blocked, news_reason = is_news_blocked(SYMBOL)
+        news_blocked, _ = is_news_blocked(SYMBOL)
         if news_blocked:
             return
 
@@ -150,58 +151,72 @@ def _on_mark_price_tick(mark_price: float):
         if not can_trade(historial):
             return
 
-        # ── Cooldown post-trade ───────────────────────────────────────────
+        # ── Cooldown post-trade (incluye CANCELLED) ───────────────────────
         if _cooldown_activo():
             return
 
         # ── Evaluar toque de banda ────────────────────────────────────────
         signal, entry_price, tp_vwap = evaluar_precio_intra_vela(mark_price, bandas)
-
         if not signal:
             return
 
-        # Marcar que hay entrada en curso para evitar duplicados
-        # (el mark price llega ~1/s, sin esto podríamos intentar entrar múltiples veces)
-        if not _entrada_en_curso.is_set():
-            _entrada_en_curso.set()
-        else:
-            return
+        # ── Marcar entrada en curso ATÓMICAMENTE ─────────────────────────
+        with _entrada_lock:
+            if _entrada_en_curso:
+                return  # otro tick llegó antes
+            _entrada_en_curso = True
 
-
-        logger.info("[%s] 🎯 Toque de banda intra-vela | Mark: %.2f | Signal: %s | Entry: %.2f | TP: %.2f",
+        logger.info("[%s] 🎯 Toque de banda | Mark: %.2f | Signal: %s | Entry: %.2f | TP: %.2f",
                     SYMBOL, mark_price, signal, entry_price, tp_vwap)
 
         # ── Calcular SL y tamaño ──────────────────────────────────────────
-        account = get_account_status(client)
-
-        reward  = abs(tp_vwap - entry_price)
-        dist_sl = reward / TP_RR_RATIO
+        account  = get_account_status(client)
+        reward   = abs(tp_vwap - entry_price)
+        dist_sl  = reward / TP_RR_RATIO
         sl_price = entry_price - dist_sl if signal == "LONG" else entry_price + dist_sl
-
-        qty = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
+        qty      = calculate_position_size(account['wallet_balance'], RISK_PER_TRADE, entry_price, sl_price)
 
         # Cap por margen disponible
         notional     = qty * entry_price
         max_notional = account['available'] * LEVERAGE * 0.8
         if notional > max_notional:
             qty_capped = round(max_notional / entry_price, 3)
-            logger.warning("[%s] Qty capado por margen: %.4f -> %.4f",
-                           SYMBOL, qty, qty_capped)
+            logger.warning("[%s] Qty capado: %.4f -> %.4f", SYMBOL, qty, qty_capped)
             qty = qty_capped
 
         if qty <= 0:
-            logger.warning("[%s] Qty inválido, abortando entrada.", SYMBOL)
-            _entrada_en_curso.clear()
+            logger.warning("[%s] Qty inválido, abortando.", SYMBOL)
+            with _entrada_lock:
+                _entrada_en_curso = False
             return
 
-        ejecutar_apertura_completa(
-            client, SYMBOL, signal, entry_price, sl_price, tp_vwap,
-            qty, RISK_PER_TRADE, balance_at_open=account['wallet_balance']
-        )
+        # ── Ejecutar en thread separado para no bloquear el stream ────────
+        def _ejecutar():
+            global _entrada_en_curso
+            try:
+                ejecutar_apertura_completa(
+                    client, SYMBOL, signal, entry_price, sl_price, tp_vwap,
+                    qty, RISK_PER_TRADE, balance_at_open=account['wallet_balance']
+                )
+            except Exception as e:
+                logger.error(f"Error en ejecución de apertura: {e}", exc_info=True)
+            finally:
+                # Solo limpiar si no quedó PENDING_FILL
+                hist = _load()
+                hay_pending = any(
+                    t.get('symbol') == SYMBOL and t.get('status') == 'PENDING_FILL'
+                    for t in hist
+                )
+                if not hay_pending:
+                    with _entrada_lock:
+                        _entrada_en_curso = False
+
+        threading.Thread(target=_ejecutar, daemon=True, name="ejecutar-apertura").start()
 
     except Exception as e:
         logger.error(f"Error en _on_mark_price_tick: {e}", exc_info=True)
-        _entrada_en_curso.clear()
+        with _entrada_lock:
+            _entrada_en_curso = False
 
 
 def main():
