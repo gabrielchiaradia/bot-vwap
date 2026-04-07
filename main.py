@@ -153,7 +153,7 @@ def _gestionar_posicion_abierta(pos_abierta, estrategia_activa: str) -> bool:
         try:
             cancel_all_open_orders(client, SYMBOL)
             close_market_position(client, SYMBOL)
-            crear_notifier().send(
+            crear_notifier().alert_error(
                 f"⏰ *TIMEOUT* {SYMBOL}\n"
                 f"Trade MEAN_REV cerrado tras {minutos_abierto:.0f} min\n"
                 f"Límite: {TIMEOUT_MINUTES_REVERSION} min"
@@ -178,7 +178,7 @@ def _gestionar_posicion_abierta(pos_abierta, estrategia_activa: str) -> bool:
                 try:
                     cancel_all_open_orders(client, SYMBOL)
                     close_market_position(client, SYMBOL)
-                    crear_notifier().send(
+                    crear_notifier().alert_error(
                         f"🔄 *RÉGIMEN CAMBIÓ* {SYMBOL}\n"
                         f"Abierto en régimen {_regime_al_abrir} → ahora {_regime_actual}\n"
                         f"PnL: {pnl_pct*100:.2f}% — cerrando"
