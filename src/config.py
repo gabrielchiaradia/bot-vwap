@@ -25,6 +25,9 @@ TRADING_DAYS = os.getenv("TRADING_DAYS", "ALLWEEK").upper()  # ALLWEEK | WORKDAY
 STRATEGY = os.getenv("STRATEGY", "reversion").lower()  # reversion | cross
 TRADING_WINDOW = os.getenv("TRADING_WINDOW", "0-24")   # ej: "13-20" para cross
 
+# Gestión de posición
+TIMEOUT_MINUTES_REVERSION = int(os.getenv("TIMEOUT_MINUTES_REVERSION", "20"))
+
 # Telegram
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")

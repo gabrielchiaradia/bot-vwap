@@ -7,7 +7,8 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from src.config import SYMBOL, BOT_ID, BOT_NAME, TP_RR_RATIO, RISK_PER_TRADE, BAND_MULT
-from src.config import TIMEFRAME, LEVERAGE, STRATEGY
+from src.config import TIMEFRAME, LEVERAGE, STRATEGY, TRADING_WINDOW
+from src.config import TIMEOUT_MINUTES_REVERSION
 from src.logger import logger
 from src.exchange import (
     get_client, get_account_status, get_open_position,
@@ -40,6 +41,8 @@ _precio_anterior: float = 0.0         # para detectar cruce del VWAP (cross stra
 # ── Régimen actual leído del clasificador externo ─────────────────────────────
 # 0 = Lateral (reversion), 1 = Tendencia (cross), 2 = Alta Volatilidad (stop)
 _regime_actual: int = -1   # -1 = no leído aún, usa STRATEGY del .env como default
+# Régimen que estaba activo cuando se abrió el trade actual (para detectar cambio)
+_regime_al_abrir: int = -1
 
 REGIME_STATE_PATH = Path(os.getenv("REGIME_STATE_PATH", "/shared/regime_state.json"))
 
@@ -86,12 +89,122 @@ def _get_strategy_from_regime(regime: int) -> str:
     return "stop"  # regime == 2
 
 
+def _dentro_de_ventana_horaria() -> bool:
+    """
+    Verifica si la hora UTC actual está dentro de TRADING_WINDOW.
+    '0-24' = siempre activo.
+    """
+    if not TRADING_WINDOW or TRADING_WINDOW == "0-24":
+        return True
+    try:
+        partes = TRADING_WINDOW.split("-")
+        h_ini, h_fin = int(partes[0]), int(partes[1])
+        hora_utc = datetime.now(timezone.utc).hour
+        return h_ini <= hora_utc < h_fin
+    except Exception:
+        return True
+
+
+def _gestionar_posicion_abierta(pos_abierta, estrategia_activa: str) -> bool:
+    """
+    Gestión activa de posición abierta. Chequea:
+    1. Timeout de mean-reversion (TIMEOUT_MINUTES_REVERSION min)
+    2. Cambio de régimen (la tesis del trade murió)
+    3. Resguardo de SL/TP
+
+    Retorna True si cerró la posición, False si sigue abierta.
+    """
+    global _regime_al_abrir
+
+    if not pos_abierta:
+        return False
+
+    # Buscar el trade OPEN en el journal
+    all_trades = _load()
+    current_trade = None
+    for t in all_trades:
+        if t.get('symbol') == SYMBOL and t.get('status') == 'OPEN' and t.get('bot_id', BOT_ID) == BOT_ID:
+            current_trade = t
+            break
+
+    if not current_trade:
+        # Trade manual o de otro bot — solo resguardar
+        gestionar_resguardo_posicion(client, SYMBOL)
+        return False
+
+    entry_time_str = current_trade.get('entry_time', '')
+    if not entry_time_str:
+        gestionar_resguardo_posicion(client, SYMBOL)
+        return False
+
+    entry_time = datetime.fromisoformat(entry_time_str)
+    minutos_abierto = (datetime.now(timezone.utc) - entry_time).total_seconds() / 60.0
+
+    # Determinar la estrategia con la que se abrió el trade
+    bias_trade = current_trade.get('bias', 'MEAN_REV')
+    es_reversion = bias_trade == 'MEAN_REV'
+
+    # ── CHECK 1: Timeout para mean-reversion ──────────────────────────────
+    if es_reversion and TIMEOUT_MINUTES_REVERSION > 0 and minutos_abierto >= TIMEOUT_MINUTES_REVERSION:
+        logger.warning(
+            "[%s] ⏰ TIMEOUT: trade MEAN_REV abierto hace %.0f min (límite: %d min) — cerrando a mercado.",
+            SYMBOL, minutos_abierto, TIMEOUT_MINUTES_REVERSION
+        )
+        try:
+            cancel_all_open_orders(client, SYMBOL)
+            close_market_position(client, SYMBOL)
+            crear_notifier().send(
+                f"⏰ *TIMEOUT* {SYMBOL}\n"
+                f"Trade MEAN_REV cerrado tras {minutos_abierto:.0f} min\n"
+                f"Límite: {TIMEOUT_MINUTES_REVERSION} min"
+            )
+        except Exception as e:
+            logger.error("[%s] Error cerrando por timeout: %s", SYMBOL, e)
+        return True
+
+    # ── CHECK 2: Cambio de régimen ────────────────────────────────────────
+    # Si el trade se abrió con reversion (régimen lateral) y ahora el
+    # régimen cambió a tendencia o alta volatilidad, la tesis murió.
+    if es_reversion and _regime_al_abrir >= 0 and _regime_actual >= 0:
+        if _regime_actual != _regime_al_abrir:
+            # Verificar PnL antes de cerrar — si está ganando, dejar correr con SL
+            account = get_account_status(client)
+            pnl_pct = account['unrealized_pnl'] / max(account['wallet_balance'], 1)
+            if pnl_pct < 0.005:  # menos de +0.5% → cerrar
+                logger.warning(
+                    "[%s] 🔄 CAMBIO DE RÉGIMEN: trade MEAN_REV abierto en régimen %d, ahora régimen %d (PnL %.2f%%) — cerrando.",
+                    SYMBOL, _regime_al_abrir, _regime_actual, pnl_pct * 100
+                )
+                try:
+                    cancel_all_open_orders(client, SYMBOL)
+                    close_market_position(client, SYMBOL)
+                    crear_notifier().send(
+                        f"🔄 *RÉGIMEN CAMBIÓ* {SYMBOL}\n"
+                        f"Abierto en régimen {_regime_al_abrir} → ahora {_regime_actual}\n"
+                        f"PnL: {pnl_pct*100:.2f}% — cerrando"
+                    )
+                except Exception as e:
+                    logger.error("[%s] Error cerrando por cambio de régimen: %s", SYMBOL, e)
+                return True
+            else:
+                logger.info(
+                    "[%s] Régimen cambió (%d→%d) pero PnL +%.2f%% — manteniendo con SL original.",
+                    SYMBOL, _regime_al_abrir, _regime_actual, pnl_pct * 100
+                )
+
+    # ── Resguardo normal de SL/TP ─────────────────────────────────────────
+    gestionar_resguardo_posicion(client, SYMBOL)
+    return False
+
+
 def inicializar():
     """Configuracion unica al arrancar el contenedor."""   
     logger.info("="*50)
     logger.info(f"Iniciando Bot {BOT_ID} para {SYMBOL} con WebSockets...")
     logger.info(f"Estrategia base: {STRATEGY.upper()} | TF: {TIMEFRAME}")
     logger.info(f"Regime state path: {REGIME_STATE_PATH}")
+    logger.info(f"Trading window: {TRADING_WINDOW} UTC")
+    logger.info(f"Timeout reversion: {TIMEOUT_MINUTES_REVERSION} min")
     logger.info("="*50)
     c = get_client()
     set_leverage(c, SYMBOL)
@@ -109,8 +222,9 @@ def _on_candle_close(df_velas, buffer):
     Lee el régimen del clasificador y elige la estrategia correspondiente.
     Responsabilidades:
     1. Auditoría de cuenta y posición
-    2. Actualizar bandas para el siguiente período intra-vela
-    3. Dashboard
+    2. Gestión activa de posición (timeout, cambio régimen)
+    3. Actualizar bandas para el siguiente período intra-vela
+    4. Dashboard
     La entrada NO se dispara aquí — lo hace _on_mark_price_tick().
     """                                                        
     
@@ -155,11 +269,16 @@ def _on_candle_close(df_velas, buffer):
         # -- Auditoría: sincronizar PnL real y detectar trades manuales                                                             
         sincronizar_realidad_vs_journal(client, SYMBOL)
 
-        # ── Gestión de posición abierta ────────────────────────────────────
+        # ── Gestión ACTIVA de posición abierta ──────────────────────────────
         pos_abierta = get_open_position(client, SYMBOL)
         _pos_abierta = pos_abierta is not None
+
         if pos_abierta:
-            gestionar_resguardo_posicion(client, SYMBOL)
+            cerro = _gestionar_posicion_abierta(pos_abierta, estrategia_activa)
+            if cerro:
+                _pos_abierta = False
+                # Re-sincronizar para que el journal registre el cierre
+                sincronizar_realidad_vs_journal(client, SYMBOL)
 
         # ── Actualizar bandas según estrategia activa ──────────────────────
         if estrategia_activa == "cross":
@@ -167,8 +286,16 @@ def _on_candle_close(df_velas, buffer):
         else:
             nuevas_bandas = actualizar_bandas(df_velas)
 
-        with _bandas_lock:
-            _bandas_actuales = nuevas_bandas
+        # ── Filtro de ventana horaria para nuevas entradas ─────────────────
+        # Si estamos fuera de ventana, no publicamos bandas (bloquea entradas)
+        # pero dejamos correr trades ya abiertos (gestionados arriba)
+        if not _dentro_de_ventana_horaria():
+            logger.debug("[%s] Fuera de ventana horaria %s UTC — bloqueando nuevas entradas.", SYMBOL, TRADING_WINDOW)
+            with _bandas_lock:
+                _bandas_actuales = None
+        else:
+            with _bandas_lock:
+                _bandas_actuales = nuevas_bandas
 
         # Limpiar flag de entrada solo si no hay PENDING_FILL activo
         historial = _load()
@@ -216,7 +343,7 @@ def _on_mark_price_tick(mark_price: float):
     La ejecución de la orden se hace en thread separado para no bloquear el stream.                                      
                                                                       
     """
-    global _entrada_en_curso, _precio_anterior, _regime_actual
+    global _entrada_en_curso, _precio_anterior, _regime_actual, _regime_al_abrir
 
     # Check atómico — si ya hay entrada en curso, salir inmediatamente                                                                 
     with _entrada_lock:
@@ -226,7 +353,7 @@ def _on_mark_price_tick(mark_price: float):
     with _bandas_lock:
         bandas = _bandas_actuales
 
-    # bandas == None cuando régimen 2 (stop) o filtros activos
+    # bandas == None cuando régimen 2 (stop), filtros activos, o fuera de ventana horaria
     if not bandas:
         _precio_anterior = mark_price
         return
@@ -305,6 +432,9 @@ def _on_mark_price_tick(mark_price: float):
                 return
             _entrada_en_curso = True
 
+        # Guardar el régimen al momento de abrir para detectar cambio después
+        _regime_al_abrir = _regime_actual
+
         logger.info("[%s] Señal %s | Regimen: %d | Mark: %.2f | Entry: %.2f | TP: %.2f | SL: %.2f",
                     SYMBOL, estrategia_activa.upper(), _regime_actual,
                     mark_price, entry_price, tp_price, sl_price)
@@ -334,13 +464,15 @@ def _on_mark_price_tick(mark_price: float):
         _ep  = entry_price
         _bal = account['wallet_balance']
         _qty = qty
+        _bias = "CROSS" if estrategia_activa == "cross" else "MEAN_REV"
 
         def _ejecutar():
             global _entrada_en_curso
             try:
                 ejecutar_apertura_completa(
                     client, SYMBOL, _sig, _ep, _sl, _tp,
-                    _qty, RISK_PER_TRADE, balance_at_open=_bal
+                    _qty, RISK_PER_TRADE, balance_at_open=_bal,
+                    bias=_bias
                 )
             except Exception as e:
                 logger.error(f"Error en ejecución de apertura: {e}", exc_info=True)

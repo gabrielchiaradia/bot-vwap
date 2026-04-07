@@ -57,9 +57,10 @@ def gestionar_resguardo_posicion(client, symbol):
     except Exception as e:
         logger.error(f"Error en gestionar_resguardo_posicion para {symbol}: {e}")
 
-def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open: float = 0.0):
+def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open: float = 0.0, bias: str = "MEAN_REV"):
     """
     Orquesta la apertura: Cancela previas, pone LIMIT, espera FILL y clava SL/TP.
+    bias: "MEAN_REV" o "CROSS" — se guarda en el journal para gestión posterior.
     """
     try:
         # 1. Limpieza previa
@@ -94,12 +95,12 @@ def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp
             except Exception as e:
                 logger.error(f"Error colocando SL/TP post-fill: {e}")
             # Notificacion solo cuando se confirmo el fill
-            record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open)
+            record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open, bias=bias)
             crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
         else:
             logger.warning(f"[{symbol}] ⚠️ LIMIT no se llenó en 10s. Orden activa en Binance, monitoreando...")
             # Guardamos como PENDING_FILL — el sincronizador lo distinguirá de un cierre real
-            record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open, status="PENDING_FILL")
+            record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open, status="PENDING_FILL", bias=bias)
 
         return True
 
