@@ -3,6 +3,7 @@ import time
 from threading import Thread
 from src.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, BOT_NAME
 from src.logger import logger
+import strategy
 
 _ultimo_heartbeat = 0
 _balance_ayer = 0.0
@@ -42,9 +43,10 @@ class TelegramNotifier:
         )
         self._send_async(msg)
 
-    def alert_trade_open(self, symbol, direction, entry, sl, tp, qty, risk_pct):
+    def alert_trade_open(self, symbol, direction, entry, sl, tp, qty, risk_pct, strategy: str = ""):
         emoji = "🚀" if direction == "LONG" else "📉"
         dist_tp = abs((tp - entry) / entry) * 100
+        strategy_label = f"\n📊 <b>Estrategia:</b> <code>{strategy}</code>" if strategy else ""
 
         msg = self._tag(
             f"{emoji} <b>NUEVA POSICIÓN ABIERTA</b>\n"
@@ -56,7 +58,8 @@ class TelegramNotifier:
             f"📥 <b>Entrada:</b> <code>{entry:.2f}</code>\n"
             f"🎯 <b>Take Profit:</b> <code>{tp:.2f}</code> (<i>+{dist_tp:.1f}%</i>)\n"
             f"🛑 <b>Stop Loss:</b> <code>{sl:.2f}</code>\n"
-            f"🛡️ <b>Riesgo:</b> <code>{risk_pct}%</code> del Capital\n"
+            f"🛡️ <b>Riesgo:</b> <code>{risk_pct}%</code> del Capital"
+            f"{strategy_label}\n"
             f"───────────────────\n"
             f"⏳ <i>Esperando ejecución de órdenes...</i>"
         )

@@ -96,7 +96,7 @@ def ejecutar_apertura_completa(client, symbol, signal, entry_price, sl_price, tp
                 logger.error(f"Error colocando SL/TP post-fill: {e}")
             # Notificacion solo cuando se confirmo el fill
             record_open(trade_id, symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, balance_at_open, bias=bias)
-            crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct)
+            crear_notifier().alert_trade_open(symbol, signal, entry_price, sl_price, tp_price, qty, risk_pct, strategy=bias)
         else:
             logger.warning(f"[{symbol}] ⚠️ LIMIT no se llenó en 10s. Orden activa en Binance, monitoreando...")
             # Guardamos como PENDING_FILL — el sincronizador lo distinguirá de un cierre real
@@ -226,7 +226,8 @@ def sincronizar_realidad_vs_journal(client, symbol):
                     crear_notifier().alert_trade_open(
                         symbol, t['direction'], float(t['entry_price']),
                         float(t['sl_price']), float(t['tp_price']),
-                        float(t['quantity']), float(t['risk_pct'])
+                        float(t['quantity']), float(t['risk_pct']),
+                        strategy=t.get('bias', '')
                     )
                     modified = True
                 else:
@@ -257,8 +258,10 @@ def sincronizar_realidad_vs_journal(client, symbol):
                             crear_notifier().alert_trade_open(
                                 symbol, t['direction'], float(t['entry_price']),
                                 float(t['sl_price']), float(t['tp_price']),
-                                float(t['quantity']), float(t['risk_pct'])
+                                float(t['quantity']), float(t['risk_pct']),
+                                strategy=t.get('bias', '')
                             )
+
                         else:
                             logger.warning(f"[{symbol}] PENDING_FILL cancelado/expirado en Binance: {t['trade_id']}")
                             t['status'] = 'CANCELLED'
