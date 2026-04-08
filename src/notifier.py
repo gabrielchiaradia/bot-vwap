@@ -3,7 +3,6 @@ import time
 from threading import Thread
 from src.config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, BOT_NAME
 from src.logger import logger
-import strategy
 
 _ultimo_heartbeat = 0
 _balance_ayer = 0.0

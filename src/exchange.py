@@ -87,6 +87,36 @@ def place_limit_order(client, symbol, side, price, quantity):
         logger.error(f"❌ Error colocando LIMIT: {e}")
         return None
 
+def place_market_order(client, symbol, side, quantity):
+    """
+    Coloca una orden MARKET para cerrar una posición por timeout.
+    side: 'BUY' o 'SELL' (lado de cierre, opuesto a la dirección del trade)
+    """
+    try:
+        step     = get_step_size(client, symbol)
+        quantity = _round_tick(float(quantity), step)
+
+        # En Hedge Mode, el positionSide es el lado de la posición que queremos cerrar
+        # Si cerramos con SELL → estamos cerrando un LONG
+        # Si cerramos con BUY  → estamos cerrando un SHORT
+        position_side = "LONG" if side == SIDE_SELL else "SHORT"
+
+        order = client.futures_create_order(
+            symbol=symbol,
+            side=side,
+            positionSide=position_side,
+            type=FUTURE_ORDER_TYPE_MARKET,
+            quantity=quantity,
+            reduceOnly=False  # Hedge Mode no usa reduceOnly
+        )
+
+        logger.info(f"[{BOT_ID}] ✅ Orden MARKET {side} colocada (timeout) qty={quantity}")
+        return order
+
+    except Exception as e:
+        logger.error(f"[{BOT_ID}] ❌ Error colocando MARKET order: {e}")
+        return None
+
 def verificar_y_rescatar_sl_tp(client, symbol, current_trade):
     """
     Verifica si una posición abierta tiene sus órdenes de protección (SL/TP).
