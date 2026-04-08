@@ -24,6 +24,7 @@ RISK_PER_TRADE = float(os.getenv("RISK_PER_TRADE", "3.0"))
 TRADING_DAYS = os.getenv("TRADING_DAYS", "ALLWEEK").upper()  # ALLWEEK | WORKDAYS
 STRATEGY = os.getenv("STRATEGY", "reversion").lower()  # reversion | cross
 TRADING_WINDOW = os.getenv("TRADING_WINDOW", "0-24")   # ej: "13-20" para cross
+TIMEOUT_MINUTES_CROSS = int(os.getenv("TIMEOUT_MINUTES_CROSS", "60"))
 
 # Gestión de posición
 TIMEOUT_MINUTES_REVERSION = int(os.getenv("TIMEOUT_MINUTES_REVERSION", "20"))
