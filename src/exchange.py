@@ -107,7 +107,6 @@ def place_market_order(client, symbol, side, quantity):
             positionSide=position_side,
             type=FUTURE_ORDER_TYPE_MARKET,
             quantity=quantity,
-            reduceOnly=False  # Hedge Mode no usa reduceOnly
         )
 
         logger.info(f"[{BOT_ID}] ✅ Orden MARKET {side} colocada (timeout) qty={quantity}")
