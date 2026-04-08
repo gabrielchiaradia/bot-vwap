@@ -83,7 +83,7 @@ def _get_strategy_from_regime(regime: int) -> str:
     if regime == -1:
         return STRATEGY  # fallback al .env
     if regime == 0:
-        return "reversion"
+        return "stop"
     if regime == 1:
         return "cross"
     return "stop"  # regime == 2
